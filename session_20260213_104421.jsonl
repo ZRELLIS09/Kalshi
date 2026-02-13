@@ -1,0 +1,20 @@
+{"type": "status", "timestamp": "2026-02-13T16:44:33.778128+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:44:33.886983+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.0}
+{"type": "status", "timestamp": "2026-02-13T16:44:44.323153+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:44:44.402204+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.0}
+{"type": "status", "timestamp": "2026-02-13T16:44:54.808028+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:44:54.876881+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.0}
+{"type": "status", "timestamp": "2026-02-13T16:45:05.471111+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:45:05.813964+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.0}
+{"type": "status", "timestamp": "2026-02-13T16:45:16.255212+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:45:16.604555+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.0}
+{"type": "status", "timestamp": "2026-02-13T16:45:27.114910+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:45:27.420412+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 1.9}
+{"type": "status", "timestamp": "2026-02-13T16:45:37.855046+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:45:38.168470+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.2}
+{"type": "status", "timestamp": "2026-02-13T16:45:48.570018+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:45:48.858178+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.2}
+{"type": "status", "timestamp": "2026-02-13T16:45:59.309268+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:45:59.611471+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.8}
+{"type": "status", "timestamp": "2026-02-13T16:46:10.431677+00:00", "balance_cents": 5241, "halted": false, "halt_reason": "", "daily_pnl_cents": 0, "open_positions": 1, "open_orders": 0, "trades_today": 0, "remaining_loss_budget": 10000}
+{"type": "scan", "timestamp": "2026-02-13T16:46:10.726514+00:00", "strategy": "CRYPTO_SCALP", "markets_scanned": 1, "signals_found": 0, "duration_ms": 0.2}

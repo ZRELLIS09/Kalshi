@@ -1,0 +1,1 @@
+exit_time,ticker,side,entry_price,exit_bid,exit_reason,spot_at_exit,strike,cushion_at_exit,ma_slope_at_exit,spot_3min,cushion_3min,bid_3min,spot_at_settle,settled_side_won,would_have_won,foregone_pnl_cents,contracts,close_time

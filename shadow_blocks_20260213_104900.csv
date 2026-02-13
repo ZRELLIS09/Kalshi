@@ -1,0 +1,1 @@
+timestamp,ticker,side,would_buy_price,contracts,block_reason,spot_price,strike,cushion_pct,momentum,ma_slope,distance_from_ma,window_minute,close_time

@@ -1,0 +1,3 @@
+exit_time,ticker,side,entry_price,exit_bid,exit_reason,spot_at_exit,strike,cushion_at_exit,ma_slope_at_exit,spot_3min,cushion_3min,bid_3min,spot_at_settle,settled_side_won,would_have_won,foregone_pnl_cents,contracts,close_time
+2026-02-13T17:18:24.004802+00:00,KXBTC15M-26FEB131230-30,yes,71,50,THIN_CUSHION,68833.57,68832.6,0.0014,0.00000,69023.68,0.2776,,69028.10,True,True,700,14,26FEB131230
+2026-02-13T17:35:50.298700+00:00,KXBTC15M-26FEB131245-45,yes,59,47,THIN_CUSHION,68964.13,68971.16,-0.0102,0.00000,69029.28,0.0843,,68976.50,True,True,3498,66,26FEB131245
