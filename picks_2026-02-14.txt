@@ -1,0 +1,157 @@
+﻿========================================================================
+  CBB ATS PICKS â€” 2026-02-14
+  Model: Torvik Power Ratings + Four Factors
+  Snapshot: team_power_snapshot_20260214.csv | HCA: 1.75 pts
+  Generated: 2026-02-14 10:19
+========================================================================
+
+  UNIT GUIDE:
+  ðŸ”’ 90%+  = 3u    ðŸ“Š 80-89% = 2u    ðŸ“‰ 65-79% = 1u    âšª <65% = Skip
+
+ðŸ”¥ STRONG PLAYS (Edge â‰¥ 5.0 pts) â€” 29 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  âšª  58.4%  St. Thomas -12.5   edge: 10.2   St. Thomas @ UMKC
+  ðŸ“‰  66.6%  High Point -25.5   edge: 9.5   High Point @ Gardner Webb
+  âšª  53.3%  Liberty -6.5   edge: 9.0   Liberty @ UTEP
+  âšª  52.3%  Mercer -9.5   edge: 8.8   Mercer @ The Citadel
+  ðŸ“Š  81.7%  Houston -22.5   edge: 8.6   Kansas St. @ Houston
+  âšª  53.1%  Furman -13.5   edge: 7.6   Furman @ VMI
+  âšª  43.9%  New Orleans -1.5   edge: 7.4   New Orleans @ Houston Christian
+  ðŸ“‰  78.0%  North Carolina -10.5   edge: 7.4   Pittsburgh @ North Carolina
+  ðŸ“‰  77.4%  Alabama A&M -15.5   edge: 7.0   Mississippi Valley St. @ Alabama A&M
+  âšª  47.3%  UC Santa Barbara -3.5   edge: 7.0   UC Santa Barbara @ Cal Poly
+  ðŸ“‰  79.6%  Austin Peay -9.5   edge: 6.9   Bellarmine @ Austin Peay
+  âšª  49.3%  North Dakota St. -5.5   edge: 6.7   North Dakota St. @ North Dakota
+  âšª  40.5%  Stephen F. Austin +1.5   edge: 6.6   Stephen F. Austin @ UT Rio Grande Valley
+  âšª  46.9%  Bethune Cookman -6.5   edge: 6.6   Bethune Cookman @ Alcorn St.
+  âšª  41.1%  Mercyhurst -2.5   edge: 6.4   Mercyhurst @ Saint Francis
+  âšª  40.6%  Sam Houston St. +1.5   edge: 6.3   Sam Houston St. @ Kennesaw St.
+  âšª  39.0%  Tarleton St. +2.5   edge: 5.8   Tarleton St. @ Abilene Christian
+  âšª  40.0%  Duquesne +1.5   edge: 5.7   Duquesne @ St. Bonaventure
+  ðŸ“‰  77.6%  Connecticut -16.5   edge: 5.6   Georgetown @ Connecticut
+  âšª  37.6%  Middle Tennessee +3.5   edge: 5.5   Middle Tennessee @ Western Kentucky
+  ðŸ“Š  83.3%  Fresno St. -16.5   edge: 5.5   Air Force @ Fresno St.
+  ðŸ“‰  78.4%  Texas St. -12.5   edge: 5.5   Louisiana Monroe @ Texas St.
+  âšª  37.6%  Arkansas Pine Bluff +2.5   edge: 5.4   Arkansas Pine Bluff @ Alabama St.
+  âšª  40.1%  Albany -4.5   edge: 5.3   Albany @ Binghamton
+  âšª  38.3%  Sacramento St. +1.5   edge: 5.3   Sacramento St. @ Northern Arizona
+  ðŸ“‰  79.4%  UC San Diego -9.5   edge: 5.3   UC Riverside @ UC San Diego
+  ðŸ“‰  73.2%  FIU -2.5   edge: 5.3   Louisiana Tech @ FIU
+  âšª  41.2%  Villanova -3.5   edge: 5.2   Villanova @ Creighton
+  âšª  38.5%  Western Carolina +1.5   edge: 5.1   Western Carolina @ Chattanooga
+
+ðŸ“Š LEAN PLAYS (Edge 3.0-4.9 pts) â€” 36 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  âšª  37.1%  Tulsa +1.5   edge: 4.7   Tulsa @ Wichita St.
+  ðŸ“‰  66.6%  Eastern Illinois +2.5   edge: 4.7   Little Rock @ Eastern Illinois
+  ðŸ“‰  77.4%  Howard -11.5   edge: 4.6   Maryland Eastern Shore @ Howard
+  âšª  44.8%  Troy -3.5   edge: 4.5   Troy @ Southern Miss
+  ðŸ“‰  77.1%  Vermont -12.5   edge: 4.4   Bryant @ Vermont
+  âšª  36.5%  Purdue -1.5   edge: 4.4   Purdue @ Iowa
+  ðŸ“‰  78.7%  Alabama -17.5   edge: 4.4   South Carolina @ Alabama
+  âšª  38.9%  SMU -2.5   edge: 4.3   SMU @ Syracuse
+  âšª  43.2%  Hawaii -2.5   edge: 4.2   Hawaii @ Cal St. Northridge
+  âšª  44.5%  Saint Mary's -7.5   edge: 4.2   Saint Mary's @ Pacific
+  âšª  36.8%  Georgia +1.5   edge: 4.2   Georgia @ Oklahoma
+  ðŸ“‰  75.4%  Nebraska -12.5   edge: 4.2   Northwestern @ Nebraska
+  âšª  36.6%  Hofstra +2.5   edge: 4.1   Hofstra @ UNC Wilmington
+  âšª  54.5%  Grand Canyon -12.5   edge: 4.1   Grand Canyon @ San Jose St.
+  ðŸ“‰  75.5%  American -9.5   edge: 4.0   Army @ American
+  âšª  40.3%  Louisville -6.5   edge: 4.0   Louisville @ Baylor
+  âšª  44.3%  South Dakota St. -5.5   edge: 3.9   South Dakota St. @ Oral Roberts
+  âšª  41.9%  Marshall -2.5   edge: 3.8   Marshall @ Georgia Southern
+  âšª  42.7%  California -3.5   edge: 3.8   California @ Boston College
+  âšª  35.6%  Texas +1.5   edge: 3.8   Texas @ Missouri
+  âšª  31.6%  Auburn +8.5   edge: 3.7   Auburn @ Arkansas
+  ðŸ“‰  72.8%  Le Moyne -6.5   edge: 3.7   Chicago St. @ Le Moyne
+  âšª  39.7%  NJIT -3.5   edge: 3.5   NJIT @ Maine
+  âšª  32.2%  Kansas +7.5   edge: 3.5   Kansas @ Iowa St.
+  âšª  48.6%  Kent St. -8.5   edge: 3.4   Kent St. @ Ball St.
+  ðŸ“‰  78.4%  Central Arkansas -11.5   edge: 3.4   West Georgia @ Central Arkansas
+  ðŸ“‰  73.8%  Notre Dame -5.5   edge: 3.3   Georgia Tech @ Notre Dame
+  ðŸ“‰  73.3%  Florida -13.5   edge: 3.3   Kentucky @ Florida
+  âšª  40.4%  Wofford -2.5   edge: 3.3   Wofford @ UNC Greensboro
+  ðŸ“‰  74.0%  Eastern Michigan -6.5   edge: 3.3   Western Michigan @ Eastern Michigan
+  âšª  33.8%  Wyoming +4.5   edge: 3.3   Wyoming @ Colorado St.
+  ðŸ“‰  75.6%  Missouri St. -7.5   edge: 3.1   Delaware @ Missouri St.
+  âšª  35.9%  Southeastern Louisiana +1.5   edge: 3.0   Southeastern Louisiana @ Northwestern St.
+  ðŸ“‰  74.6%  East Tennessee St. -6.5   edge: 3.0   Samford @ East Tennessee St.
+  âšª  40.4%  Appalachian St. -1.5   edge: 3.0   Appalachian St. @ James Madison
+  âšª  40.6%  Southern -3.5   edge: 3.0   Southern @ Prairie View A&M
+
+ðŸ‘€ WATCH LIST (Edge < 3.0 pts) â€” 65 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  ðŸ“‰  73.4%  Rice -5.5   edge: 2.9   East Carolina @ Rice
+  âšª  35.8%  Lehigh +1.5   edge: 2.9   Lehigh @ Lafayette
+  ðŸ“‰  73.9%  Michigan -16.5   edge: 2.8   UCLA @ Michigan
+  âšª  54.5%  McNeese St. -13.5   edge: 2.7   McNeese St. @ East Texas A&M
+  âšª  45.8%  VCU -7.5   edge: 2.7   VCU @ Richmond
+  âšª  46.0%  Loyola Marymount -6.5   edge: 2.7   Loyola Marymount @ Pepperdine
+  ðŸ“‰  70.0%  Vanderbilt -6.5   edge: 2.4   Texas A&M @ Vanderbilt
+  âšª  29.7%  Nevada +8.5   edge: 2.4   Nevada @ San Diego St.
+  âšª  32.9%  Stanford +4.5   edge: 2.3   Stanford @ Wake Forest
+  âšª  35.5%  Nicholls St. +1.5   edge: 2.2   Nicholls St. @ Incarnate Word
+  âšª  37.7%  Florida A&M -2.5   edge: 2.2   Florida A&M @ Jackson St.
+  âšª  43.5%  Yale -5.5   edge: 2.2   Yale @ Harvard
+  ðŸ“‰  75.9%  Utah St. -13.5   edge: 2.2   Memphis @ Utah St.
+  ðŸ“‰  65.4%  SIU Edwardsville +1.5   edge: 2.1   Tennessee Martin @ SIU Edwardsville
+  âšª  64.6%  Penn +2.5   edge: 2.1   Cornell @ Penn
+  ðŸ“‰  71.1%  Dartmouth -3.5   edge: 2.1   Brown @ Dartmouth
+  âšª  34.7%  Wagner +2.5   edge: 2.0   Wagner @ Stonehill
+  âšª  33.7%  Portland St. +3.5   edge: 2.0   Portland St. @ Northern Colorado
+  âšª  30.6%  USC Upstate +6.5   edge: 1.9   USC Upstate @ Longwood
+  ðŸ“‰  71.8%  UC Davis -4.5   edge: 1.9   Long Beach St. @ UC Davis
+  ðŸ“‰  71.1%  UNC Asheville -4.5   edge: 1.9   Presbyterian @ UNC Asheville
+  ðŸ“‰  75.4%  UT Arlington -8.5   edge: 1.9   Southern Utah @ UT Arlington
+  âšª  29.0%  Clemson +13.5   edge: 1.6   Clemson @ Duke
+  âšª  31.8%  Minnesota +5.5   edge: 1.6   Minnesota @ Washington
+  âšª  32.8%  Charleston Southern +3.5   edge: 1.5   Charleston Southern @ Radford
+  ðŸ“‰  75.2%  Tennessee -14.5   edge: 1.5   LSU @ Tennessee
+  âšª  33.8%  Lipscomb +2.5   edge: 1.5   Lipscomb @ Queens
+  âšª  40.2%  Cal Baptist -2.5   edge: 1.5   Cal Baptist @ Utah Tech
+  ðŸ“‰  74.6%  UC Irvine -7.5   edge: 1.4   Cal St. Fullerton @ UC Irvine
+  âšª  34.1%  Weber St. +2.5   edge: 1.4   Weber St. @ Eastern Washington
+  âšª  39.7%  UMBC -3.5   edge: 1.3   UMBC @ New Hampshire
+  âšª  33.8%  Marquette +2.5   edge: 1.2   Marquette @ Xavier
+  âšª  31.2%  North Florida +6.5   edge: 1.2   North Florida @ Jacksonville
+  ðŸ“‰  72.5%  Idaho -6.5   edge: 1.2   Idaho St. @ Idaho
+  ðŸ“‰  69.3%  N.C. State -5.5   edge: 1.2   Miami FL @ N.C. State
+  ðŸ“‰  71.3%  Boston University -5.5   edge: 1.1   Bucknell @ Boston University
+  âšª  64.9%  Morehead St. +1.5   edge: 1.1   Tennessee St. @ Morehead St.
+  ðŸ“‰  74.8%  William & Mary -8.5   edge: 1.1   Elon @ William & Mary
+  âšª  29.1%  Delaware St. +9.5   edge: 1.0   Delaware St. @ Norfolk St.
+  ðŸ“‰  71.6%  North Carolina Central -11.5   edge: 1.0   Coppin St. @ North Carolina Central
+  ðŸ“‰  68.7%  Texas A&M Corpus Chris -2.5   edge: 1.0   Lamar @ Texas A&M Corpus Chris
+  âšª  64.5%  Oklahoma St. +1.5   edge: 1.0   TCU @ Oklahoma St.
+  âšª  41.1%  St. John's -8.5   edge: 0.9   St. John's @ Providence
+  âšª  31.4%  Georgia St. +4.5   edge: 0.9   Georgia St. @ Old Dominion
+  âšª  30.3%  Texas Tech +9.5   edge: 0.8   Texas Tech @ Arizona
+  âšª  36.8%  Grambling St. -1.5   edge: 0.8   Grambling St. @ Texas Southern
+  ðŸ“‰  73.9%  Florida Gulf Coast -9.5   edge: 0.8   Stetson @ Florida Gulf Coast
+  âšª  63.8%  Colgate +1.5   edge: 0.8   Navy @ Colgate
+  âšª  63.5%  Santa Clara +4.5   edge: 0.8   Gonzaga @ Santa Clara
+  ðŸ“‰  66.6%  Southern Indiana -1.5   edge: 0.8   Tennessee Tech @ Southern Indiana
+  ðŸ“‰  76.4%  BYU -15.5   edge: 0.7   Colorado @ BYU
+  ðŸ“‰  70.4%  Rhode Island -4.5   edge: 0.6   Fordham @ Rhode Island
+  âšª  29.0%  Penn St. +6.5   edge: 0.6   Penn St. @ Oregon
+  âšª  64.3%  Fairleigh Dickinson +1.5   edge: 0.6   Central Connecticut @ Fairleigh Dickinson
+  âšª  28.6%  South Alabama +6.5   edge: 0.4   South Alabama @ Arkansas St.
+  ðŸ“‰  67.7%  UCF -3.5   edge: 0.4   West Virginia @ UCF
+  ðŸ“‰  70.3%  Virginia Tech -5.5   edge: 0.3   Florida St. @ Virginia Tech
+  âšª  33.8%  Montana St. +1.5   edge: 0.2   Montana St. @ Montana
+  âšª  37.1%  Columbia -1.5   edge: 0.2   Columbia @ Princeton
+  âšª  33.6%  New Mexico St. +1.5   edge: 0.2   New Mexico St. @ Jacksonville St.
+  ðŸ“‰  67.8%  Lindenwood -2.5   edge: 0.2   Southeast Missouri St. @ Lindenwood
+  ðŸ“‰  68.9%  Bowling Green -3.5   edge: 0.1   Toledo @ Bowling Green
+  âšª  30.6%  Northern Illinois +4.5   edge: 0.1   Northern Illinois @ Central Michigan
+  âšª  63.2%  Ohio St. +4.5   edge: 0.1   Virginia @ Ohio St.
+  âšª  31.8%  Mississippi St. +3.5   edge: 0.0   Mississippi St. @ Mississippi
+
+âš ï¸  ERRORS (1 games)
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  New Haven Chargers vs LIU: Team not found: ['New Haven Chargers']
+
+========================================================================
+  TOTAL: 130 predicted | Strong: 29 | Lean: 36 | Watch: 65
+  âš ï¸  1 games failed (team name mismatch)
+========================================================================

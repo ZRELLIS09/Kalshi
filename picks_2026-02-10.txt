@@ -1,0 +1,44 @@
+========================================================================
+  CBB ATS PICKS â€” 2026-02-10
+  Model: Torvik Power Ratings + Four Factors
+  Snapshot: team_power_snapshot_20260210.csv | HCA: 1.75 pts
+  Generated: 2026-02-10 19:27
+========================================================================
+
+  UNIT GUIDE:
+  ðŸ”’ 90%+  = 3u    ðŸ“Š 80-89% = 2u    ðŸ“‰ 65-79% = 1u    âšª <65% = Skip
+
+ðŸ”¥ STRONG PLAYS (Edge â‰¥ 5.0 pts) â€” 13 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  âšª  41.0%  George Mason +14.5   edge: 19.4   George Mason @ Richmond
+  âšª  45.6%  Virginia -0.5   edge: 15.1   Virginia @ Florida St.
+  âšª  52.1%  Houston -16.5   edge: 10.3   Houston @ Utah
+  âšª  44.3%  Iowa St. -7.5   edge: 9.9   Iowa St. @ TCU
+  ðŸ“‰  66.0%  Nebraska +10.5   edge: 9.8   Purdue @ Nebraska
+  âšª  41.6%  Eastern Illinois -4.5   edge: 9.1   Eastern Illinois @ Western Illinois
+  ðŸ“‰  72.9%  Illinois -7.5   edge: 8.7   Wisconsin @ Illinois
+  âšª  51.7%  Duke -16.5   edge: 7.8   Duke @ Pittsburgh
+  ðŸ“‰  76.0%  Villanova -7.5   edge: 7.8   Marquette @ Villanova
+  âšª  36.8%  North Carolina +2.5   edge: 6.9   North Carolina @ Miami FL
+  âšª  59.8%  Colorado St. -16.5   edge: 6.2   Colorado St. @ Air Force
+  ðŸ“‰  75.3%  SMU -8.5   edge: 5.9   Notre Dame @ SMU
+  ðŸ“‰  73.9%  Saint Joseph's -3.5   edge: 5.0   Fordham @ Saint Joseph's
+
+ðŸ“Š LEAN PLAYS (Edge 3.0-4.9 pts) â€” 2 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  âšª  64.0%  Auburn +8.5   edge: 4.7   Vanderbilt @ Auburn
+  âšª  40.1%  Arkansas -4.5   edge: 4.4   Arkansas @ LSU
+
+ðŸ‘€ WATCH LIST (Edge < 3.0 pts) â€” 7 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  ðŸ“‰  73.7%  George Washington -6.5   edge: 2.6   Rhode Island @ George Washington
+  ðŸ“‰  65.6%  IU Indy +1.5   edge: 2.1   Milwaukee @ IU Indy
+  âšª  62.7%  Baylor +6.5   edge: 1.8   BYU @ Baylor
+  ðŸ“‰  77.1%  UNLV -11.5   edge: 0.8   San Jose St. @ UNLV
+  ðŸ“Š  80.4%  Utah St. -20.5   edge: 0.6   Fresno St. @ Utah St.
+  âšª  33.2%  Oklahoma St. +2.5   edge: 0.5   Oklahoma St. @ Arizona St.
+  ðŸ“‰  79.9%  Gonzaga -21.5   edge: 0.3   Washington St. @ Gonzaga
+
+========================================================================
+  TOTAL: 22 predicted | Strong: 13 | Lean: 2 | Watch: 7
+========================================================================

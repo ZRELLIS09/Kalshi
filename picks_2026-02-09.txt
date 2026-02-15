@@ -1,0 +1,48 @@
+========================================================================
+  CBB ATS PICKS — 2026-02-09
+  Model: Torvik Power Ratings + Four Factors
+  Snapshot: team_power_snapshot_20260209.csv | HCA: 3.5 pts
+  Generated: 2026-02-09 17:56
+========================================================================
+
+  UNIT GUIDE:
+  🔒 90%+  = 3u    📊 80-89% = 2u    📉 65-79% = 1u    ⚪ <65% = Skip
+
+🔥 STRONG PLAYS (Edge ≥ 5.0 pts) — 12 games
+────────────────────────────────────────────────────────────────────────
+  🔒  98.5%  Central Arkansas -6.5   edge: -10.6   Central Arkansas @ North Alabama
+  🔒  99.5%  Stephen F. Austin -15.5   edge: +9.7   East Texas A&M @ Stephen F. Austin
+  🔒  94.5%  St. John's -11.5   edge: +9.6   Xavier @ St. John's
+  🔒  99.5%  Illinois St. -10.5   edge: -7.7   Illinois St. @ Evansville
+  🔒  90.1%  Indiana -10.5   edge: +7.2   Oregon @ Indiana
+  🔒  90.1%  Lamar -6.5   edge: +7.0   Northwestern St. @ Lamar
+  📊  85.2%  Arkansas Pine Bluff -6.5   edge: +6.8   Jackson St. @ Arkansas Pine Bluff
+  🔒  92.6%  Belmont -1.5   edge: -6.3   Belmont @ Bradley
+  🔒  99.6%  McNeese St. -21.5   edge: +6.0   Houston Christian @ McNeese St.
+  🔒  97.7%  Yale -6.5   edge: -5.5   Yale @ Howard
+  📉  78.1%  Grambling St. -4.5   edge: +5.4   Alabama A&M @ Grambling St.
+  📊  87.9%  Bethune Cookman -7.5   edge: +5.2   Texas Southern @ Bethune Cookman
+
+📊 LEAN PLAYS (Edge 3.0-4.9 pts) — 4 games
+────────────────────────────────────────────────────────────────────────
+  📉  75.6%  Valparaiso +3.5   edge: -4.5   Valparaiso @ Drake
+  ⚪  59.7%  Texas A&M Corpus Chris -1.5   edge: +3.3   Texas A&M Corpus Chris @ New Orleans
+  📉  78.4%  Alcorn St. -5.5   edge: -3.1   Alcorn St. @ Mississippi Valley St.
+  📉  78.0%  Southern -6.5   edge: +3.1   Alabama St. @ Southern
+
+👀 WATCH LIST (Edge < 3.0 pts) — 10 games
+────────────────────────────────────────────────────────────────────────
+  🔒  95.0%  Navy -12.5   edge: +2.8   Navy @ Bucknell
+  ⚪  55.4%  Florida A&M -2.5   edge: +2.5   Prairie View A&M @ Florida A&M
+  🔒  90.1%  UT Rio Grande Valley -3.5   edge: -1.8   UT Rio Grande Valley @ Nicholls St.
+  ⚪  56.4%  Louisville -7.5   edge: -1.7   N.C. State @ Louisville
+  📉  65.5%  Arizona -2.5   edge: -1.3   Arizona @ Kansas
+  📉  72.3%  Southern Illinois -1.5   edge: +1.3   Southern Illinois @ Indiana St.
+  📉  67.4%  UNC Wilmington +1.5   edge: -0.8   UNC Wilmington @ Charleston
+  ⚪  60.6%  Incarnate Word +1.5   edge: +0.5   Incarnate Word @ Southeastern Louisiana
+  ⚪  65.0%  North Carolina Central -7.5   edge: +0.2   Delaware St. @ North Carolina Central
+  ⚪  54.3%  Northern Iowa +3.5   edge: -0.1   Northern Iowa @ Murray St.
+
+========================================================================
+  TOTAL: 26 predicted | Strong: 12 | Lean: 4 | Watch: 10
+========================================================================

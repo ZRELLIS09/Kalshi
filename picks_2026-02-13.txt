@@ -1,0 +1,38 @@
+﻿========================================================================
+  CBB ATS PICKS â€” 2026-02-13
+  Model: Torvik Power Ratings + Four Factors
+  Snapshot: team_power_snapshot_20260213.csv | HCA: 1.75 pts
+  Generated: 2026-02-13 17:33
+========================================================================
+
+  UNIT GUIDE:
+  ðŸ”’ 90%+  = 3u    ðŸ“Š 80-89% = 2u    ðŸ“‰ 65-79% = 1u    âšª <65% = Skip
+
+ðŸ”¥ STRONG PLAYS (Edge â‰¥ 5.0 pts) â€” 3 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  ðŸ“‰  68.1%  Saint Louis -17.5   edge: 17.0   Saint Louis @ Loyola Chicago
+  ðŸ“Š  80.3%  Miami OH -8.5   edge: 7.9   Ohio @ Miami OH
+  âšª  44.4%  Iona -4.5   edge: 6.4   Iona @ Canisius
+
+ðŸ“Š LEAN PLAYS (Edge 3.0-4.9 pts) â€” 5 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  ðŸ“‰  66.4%  Niagara +2.5   edge: 4.4   Manhattan @ Niagara
+  âšª  41.2%  Mount St. Mary's -5.5   edge: 4.4   Mount St. Mary's @ Rider
+  âšª  40.3%  Saint Peter's -1.5   edge: 4.3   Saint Peter's @ Sacred Heart
+  ðŸ“‰  76.4%  Harvard -7.5   edge: 3.8   Brown @ Harvard
+  ðŸ“‰  71.6%  George Washington -3.5   edge: 3.6   George Mason @ George Washington
+
+ðŸ‘€ WATCH LIST (Edge < 3.0 pts) â€” 8 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  ðŸ“‰  69.7%  Penn -2.5   edge: 1.9   Columbia @ Penn
+  âšª  36.2%  Michigan St. -1.5   edge: 1.9   Michigan St. @ Wisconsin
+  âšª  49.3%  Yale -10.5   edge: 1.8   Yale @ Dartmouth
+  ðŸ“‰  78.0%  Akron -12.5   edge: 1.7   Massachusetts @ Akron
+  âšª  32.3%  Quinnipiac +3.5   edge: 1.1   Quinnipiac @ Siena
+  âšª  61.5%  Princeton +3.5   edge: 0.6   Cornell @ Princeton
+  ðŸ“‰  67.7%  Hampton -2.5   edge: 0.6   North Carolina A&T @ Hampton
+  ðŸ“‰  74.9%  Boise St. -10.5   edge: 0.5   UNLV @ Boise St.
+
+========================================================================
+  TOTAL: 16 predicted | Strong: 3 | Lean: 5 | Watch: 8
+========================================================================

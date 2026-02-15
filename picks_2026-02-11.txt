@@ -1,0 +1,76 @@
+========================================================================
+  CBB ATS PICKS â€” 2026-02-11
+  Model: Torvik Power Ratings + Four Factors
+  Snapshot: team_power_snapshot_20260210.csv | HCA: 1.75 pts
+  Generated: 2026-02-11 18:02
+========================================================================
+
+  UNIT GUIDE:
+  ðŸ”’ 90%+  = 3u    ðŸ“Š 80-89% = 2u    ðŸ“‰ 65-79% = 1u    âšª <65% = Skip
+
+ðŸ”¥ STRONG PLAYS (Edge â‰¥ 5.0 pts) â€” 18 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  âšª  51.6%  Iowa -2.5   edge: 17.6   Iowa @ Maryland
+  âšª  26.7%  The Citadel +27.5   edge: 16.9   The Citadel @ Western Carolina
+  âšª  48.2%  Michigan -15.5   edge: 9.5   Michigan @ Northwestern
+  âšª  37.6%  Wofford +6.5   edge: 9.0   Wofford @ Samford
+  âšª  44.3%  Alabama -6.5   edge: 8.6   Alabama @ Mississippi
+  âšª  42.3%  Buffalo +1.5   edge: 8.1   Buffalo @ Ball St.
+  âšª  45.6%  Tennessee -7.5   edge: 8.0   Tennessee @ Mississippi St.
+  ðŸ“Š  87.9%  Saint Mary's -24.5   edge: 7.2   Pepperdine @ Saint Mary's
+  âšª  45.5%  Connecticut -11.5   edge: 6.5   Connecticut @ Butler
+  âšª  46.8%  Florida Atlantic -3.5   edge: 6.4   Florida Atlantic @ Rice
+  âšª  39.7%  Austin Peay +2.5   edge: 6.3   Austin Peay @ Queens
+  ðŸ“‰  77.9%  Santa Clara -11.5   edge: 6.2   Seattle @ Santa Clara
+  ðŸ“‰  77.9%  Central Arkansas -8.5   edge: 6.0   Bellarmine @ Central Arkansas
+  ðŸ“‰  77.2%  Texas Tech -13.5   edge: 5.8   Colorado @ Texas Tech
+  âšª  61.9%  Army +9.5   edge: 5.5   Boston University @ Army
+  ðŸ“‰  79.4%  East Tennessee St. -10.5   edge: 5.2   Chattanooga @ East Tennessee St.
+  âšª  42.5%  Appalachian St. -1.5   edge: 5.1   Appalachian St. @ Georgia Southern
+  âšª  44.8%  Liberty -3.5   edge: 5.1   Liberty @ New Mexico St.
+
+ðŸ“Š LEAN PLAYS (Edge 3.0-4.9 pts) â€” 18 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  âšª  39.1%  Temple +1.5   edge: 4.8   Temple @ Tulane
+  âšª  36.6%  West Georgia +1.5   edge: 4.8   West Georgia @ North Alabama
+  ðŸ“‰  76.9%  Tulsa -9.5   edge: 4.4   UAB @ Tulsa
+  âšª  45.7%  Troy -4.5   edge: 4.3   Troy @ Texas St.
+  âšª  40.3%  American -1.5   edge: 4.0   American @ Lehigh
+  ðŸ“‰  73.5%  Clemson -8.5   edge: 3.9   Virginia Tech @ Clemson
+  âšª  36.9%  Portland +2.5   edge: 3.9   Portland @ San Diego
+  ðŸ“‰  75.5%  Jacksonville St. -6.5   edge: 3.8   UTEP @ Jacksonville St.
+  âšª  40.0%  Florida -8.5   edge: 3.8   Florida @ Georgia
+  âšª  33.0%  Providence +4.5   edge: 3.8   Providence @ Seton Hall
+  âšª  42.4%  Stanford -3.5   edge: 3.7   Stanford @ Boston College
+  âšª  48.1%  Bowling Green -7.5   edge: 3.7   Bowling Green @ Northern Illinois
+  ðŸ“Š  83.5%  Arkansas St. -20.5   edge: 3.7   Louisiana Monroe @ Arkansas St.
+  âšª  32.3%  California +6.5   edge: 3.7   California @ Syracuse
+  ðŸ“‰  73.3%  UNC Greensboro -8.5   edge: 3.6   VMI @ UNC Greensboro
+  âšª  27.4%  Eastern Michigan +10.5   edge: 3.5   Eastern Michigan @ Kent St.
+  âšª  42.3%  Wake Forest -3.5   edge: 3.5   Wake Forest @ Georgia Tech
+  âšª  45.5%  Toledo -6.5   edge: 3.2   Toledo @ Western Michigan
+
+ðŸ‘€ WATCH LIST (Edge < 3.0 pts) â€” 18 games
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  âšª  35.1%  New Mexico +1.5   edge: 2.8   New Mexico @ Grand Canyon
+  ðŸ“‰  71.4%  Texas A&M -6.5   edge: 2.8   Missouri @ Texas A&M
+  ðŸ“‰  77.6%  Washington -12.5   edge: 2.6   Penn St. @ Washington
+  âšª  41.0%  Marshall -2.5   edge: 2.6   Marshall @ Old Dominion
+  âšª  40.0%  Cincinnati -2.5   edge: 2.5   Cincinnati @ Kansas St.
+  âšª  54.4%  Holy Cross +13.5   edge: 2.5   Colgate @ Holy Cross
+  âšª  52.3%  VCU -13.5   edge: 1.8   VCU @ La Salle
+  ðŸ“‰  69.0%  Lafayette -3.5   edge: 1.8   Loyola MD @ Lafayette
+  ðŸ“‰  69.3%  Ohio St. -4.5   edge: 1.7   USC @ Ohio St.
+  ðŸ“‰  72.4%  Pacific -5.5   edge: 1.7   Loyola Marymount @ Pacific
+  ðŸ“‰  72.6%  Lipscomb -6.5   edge: 1.5   Eastern Kentucky @ Lipscomb
+  âšª  25.3%  North Florida +13.5   edge: 1.5   North Florida @ Florida Gulf Coast
+  âšª  64.7%  Stetson +2.5   edge: 1.2   Jacksonville @ Stetson
+  ðŸ“‰  73.5%  East Carolina -10.5   edge: 1.0   UTSA @ East Carolina
+  âšª  36.7%  Creighton -1.5   edge: 0.8   Creighton @ DePaul
+  âšª  31.5%  Furman +3.5   edge: 0.3   Furman @ Mercer
+  ðŸ“‰  67.0%  South Dakota -1.5   edge: 0.3   North Dakota @ South Dakota
+  âšª  35.9%  South Florida -1.5   edge: 0.0   South Florida @ Wichita St.
+
+========================================================================
+  TOTAL: 54 predicted | Strong: 18 | Lean: 18 | Watch: 18
+========================================================================
