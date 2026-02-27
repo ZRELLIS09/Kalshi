@@ -1166,9 +1166,11 @@ if engState == 4 and bar_index > stateBar
     mss1mAligned = (huntDir == 1 and mss1mBull) or (huntDir == -1 and mss1mBear)
 
     if mss1mAligned and timeOK and pdOK and dirOK
-        engState := 5
-        stateBar := bar_index
-        fvgType  := ""
+        engState   := 5
+        stateBar   := bar_index
+        fvgType    := ""
+        oteSwingHi := na    // reset OTE swing trackers on state entry
+        oteSwingLo := na    // running max/min will be built from this bar forward
 
         if i_showTS
             _1mMssSty = huntDir == 1 ? label.style_label_up : label.style_label_down
@@ -1220,10 +1222,10 @@ if engState == 5 and bar_index > stateBar
     // Short (bearish hunt): swing = sweepExtreme (high) to lowest close since sweep
     if huntDir == 1
         oteSwingLo := sweepExtreme
-        oteSwingHi := ta.highest(close, i_huntTimeout)  // Pine v6: length must be simple series/const, not computed expression
+        oteSwingHi := na(oteSwingHi) ? close : math.max(oteSwingHi, close)
     if huntDir == -1
         oteSwingHi := sweepExtreme
-        oteSwingLo := ta.lowest(close, i_huntTimeout)   // Pine v6: length must be simple series/const, not computed expression
+        oteSwingLo := na(oteSwingLo) ? close : math.min(oteSwingLo, close)
 
     // OTE levels (Fib retracement of the displacement swing)
     _oteFib = i_entryMode == "OTE 0.62" ? 0.62 : i_entryMode == "OTE 0.79" ? 0.79 : 0.705
