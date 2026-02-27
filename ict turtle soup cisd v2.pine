@@ -1,0 +1,1580 @@
+// ============================================================================
+// ICT TURTLE SOUP + CISD ENGINE v2
+// 100% ICT 2022 Mentorship Compliant
+// ============================================================================
+// Execution Architecture (locked order of operations):
+//   HTF Bias (1D/4H/1H) → Liquidity Draw → Turtle Soup (sweep + failed break)
+//   → 5M Displacement (3+ large bodies) → 15M MSS Confirmation (swing break)
+//   → 1M MSS Execution Trigger → SIBI/BISI FVG (parent-validated, first presented)
+//   → OTE entry (0.705 Fib of swing), Target = nearest liquidity level
+//
+// Strict ICT Rules enforced:
+//   • NO fixed sweep ticks, R:R minimums, ATR multipliers, or lookback thresholds
+//   • Displacement = 3+ consecutive same-direction closes, each body > 2× avg(10)
+//   • Sweep = wick through level + close BACK within level window (failed break)
+//   • MSS = close through recent swing (3–5 bars back) after sweep — on 15M first, 1M second
+//   • CISD = delivery sequence on 5M/1M + MSS confirming order-flow shift
+//   • SIBI = Sellside Imbalance Buyside Inefficiency (bearish FVG, enter in it going long)
+//   • BISI = Buyside Imbalance Sellside Inefficiency (bullish FVG, enter going short)
+//   • OTE entry = 0.62 / 0.705 / 0.79 Fib of displacement swing (0.705 preferred)
+//   • Target = nearest unswept liquidity level (no R:R math)
+//   • Premium = top 25% of 1H range → favor shorts
+//   • Discount = bottom 25% of 1H range → favor longs
+//   • PO3: Accumulation → Manipulation (sweep) → Distribution (displacement)
+//   • Parent FVG overlap required for OB validation
+//   • Killzones: London 2–5am, NY AM 8:30–11am, NY PM 1:30–4pm (all EST)
+//   • Reversals require Killzone. Continuation allowed in NY PM only.
+//   • HTF rules LTF: no trade if 1D/4H/1H conflict or oppose sweep direction
+//   • NO VWAP, EMA, RSI, volume profile, or any non-ICT indicator
+// ============================================================================
+
+//@version=6
+strategy("ICT Turtle Soup + CISD v2", shorttitle="TS+CISD v2", overlay=true,
+     max_lines_count=500, max_labels_count=500, max_boxes_count=500,
+     pyramiding=0, initial_capital=100000,
+     default_qty_type=strategy.fixed, default_qty_value=1,
+     commission_type=strategy.commission.cash_per_contract, commission_value=1.20,
+     slippage=1)
+
+// ============================================================================
+// SECTION 1 — INPUTS
+// ============================================================================
+
+GRP_SW  = "Swing Detection"
+i_sw1m  = input.int(5,  "1m Swing Bars (execution)",  minval=2, maxval=10, group=GRP_SW)
+i_sw5m  = input.int(5,  "5m Swing Bars (CISD)",       minval=2, maxval=10, group=GRP_SW)
+i_sw15m = input.int(5,  "15m Swing Bars (MSS confirm)",minval=2, maxval=10, group=GRP_SW)
+i_sw1h  = input.int(4,  "1h Swing Bars (dealing range)",minval=2, maxval=10, group=GRP_SW)
+i_sw4h  = input.int(4,  "4h Swing Bars (HTF struct)", minval=2, maxval=10, group=GRP_SW)
+i_swD   = input.int(3,  "Daily Swing Bars (HTF struct)",minval=1, maxval=10, group=GRP_SW)
+
+GRP_LIQ = "Liquidity Sources"
+i_show15m   = input.bool(true, "15m Levels",     group=GRP_LIQ)
+i_show1h    = input.bool(true, "1h Levels",      group=GRP_LIQ)
+i_show4h    = input.bool(true, "4h Levels",      group=GRP_LIQ)
+i_showD     = input.bool(true, "Daily Levels",   group=GRP_LIQ)
+i_showPDHL  = input.bool(true, "Prior Day H/L",  group=GRP_LIQ)
+i_showPWHL  = input.bool(true, "Prior Week H/L", group=GRP_LIQ)
+i_maxLevels = input.int(50,   "Max Levels",      minval=10, maxval=200, group=GRP_LIQ)
+
+GRP_SESS = "Session & Time"
+i_useKZOnly    = input.bool(false, "Killzone-Only Reversals",          group=GRP_SESS,
+                     tooltip="Reversals only within London/NY AM killzones")
+i_allowPMCont  = input.bool(true,  "Allow NY PM Continuation (1:30-4pm)", group=GRP_SESS,
+                     tooltip="Continuation trades allowed outside AM killzone in PM session")
+i_showSessions = input.bool(true,  "Show Session Backgrounds",         group=GRP_SESS)
+i_showOpenLines= input.bool(true,  "Show 9:30 / Midnight Open Lines",  group=GRP_SESS)
+i_showWickGrade= input.bool(true,  "Show Prev Daily Wick Grades",      group=GRP_SESS)
+i_dayFilter    = input.string("All Days","Day Filter",
+                     options=["All Days","Tue-Thu Only","Tue-Wed Only"], group=GRP_SESS)
+
+GRP_ENG  = "Engine Settings"
+i_tsFailBars  = input.int(3, "Turtle Soup: Failed-Break Window (bars)",minval=2, maxval=8, group=GRP_ENG,
+                     tooltip="Close must return inside sweep level within N bars for valid TS")
+i_dispBars    = input.int(3, "Displacement: Min Consecutive Bodies",   minval=2, maxval=6, group=GRP_ENG,
+                     tooltip="ICT: 3+ same-direction large bodies. No ATR.")
+i_dispBodyAvg = input.int(10,"Displacement: Avg Body Lookback",        minval=5, maxval=30, group=GRP_ENG,
+                     tooltip="Body is 'large' if > 2× avg body over this lookback")
+i_mssBars     = input.int(5, "MSS: Swing Lookback (bars)",             minval=3, maxval=10, group=GRP_ENG,
+                     tooltip="MSS = close through the highest/lowest of last N bars on that TF")
+i_huntTimeout = input.int(80,"Max Bars Per Hunt State",                minval=20, maxval=300, group=GRP_ENG)
+i_eqTicks     = input.int(5, "EQH/EQL Tolerance (ticks)",             minval=1,  maxval=20, group=GRP_ENG)
+
+GRP_VIS  = "Visual Style"
+i_lineWidth   = input.int(1,  "Liq Line Width",     minval=1, maxval=3, group=GRP_VIS)
+i_colBSL      = input.color(color.new(#26a69a, 0),  "Buyside Liq",     group=GRP_VIS)
+i_colSSL      = input.color(color.new(#ef5350, 0),  "Sellside Liq",    group=GRP_VIS)
+i_colPDHL     = input.color(color.new(#ff9800, 0),  "Prior Day H/L",   group=GRP_VIS)
+i_colPWHL     = input.color(color.new(#9c27b0, 0),  "Prior Week H/L",  group=GRP_VIS)
+i_colBISI     = input.color(color.new(#26a69a, 75), "SIBI (Bear FVG)", group=GRP_VIS)
+i_colSIBI     = input.color(color.new(#ef5350, 75), "BISI (Bull FVG)", group=GRP_VIS)
+i_colOB       = input.color(color.new(#ff9800, 80), "Order Block",     group=GRP_VIS)
+i_colAsiaKZ   = input.color(color.new(#607d8b, 92), "Asia Session",    group=GRP_VIS)
+i_colLondonKZ = input.color(color.new(#2196f3, 92), "London KZ",       group=GRP_VIS)
+i_colNYKZ     = input.color(color.new(#ff9800, 92), "NY AM KZ",        group=GRP_VIS)
+i_colNYPMKZ   = input.color(color.new(#9c27b0, 92), "NY PM KZ",        group=GRP_VIS)
+i_colWickPrem = input.color(color.new(#ef5350, 88), "Wick Premium",    group=GRP_VIS)
+i_colWickDisc = input.color(color.new(#26a69a, 88), "Wick Discount",   group=GRP_VIS)
+i_colPremZone = input.color(color.new(#ef5350, 93), "Premium Zone",    group=GRP_VIS)
+i_colDiscZone = input.color(color.new(#26a69a, 93), "Discount Zone",   group=GRP_VIS)
+i_colOTE      = input.color(color.new(#ffeb3b, 85), "OTE Zone",        group=GRP_VIS)
+i_colCISD     = input.color(color.new(#2196f3, 0),  "CISD Line",       group=GRP_VIS)
+
+GRP_DISP = "Display Toggles"
+i_showTS     = input.bool(true,  "Turtle Soup Labels",    group=GRP_DISP)
+i_showFVG    = input.bool(true,  "SIBI/BISI Boxes",       group=GRP_DISP)
+i_showOB     = input.bool(true,  "Order Block Boxes",     group=GRP_DISP)
+i_showOTE    = input.bool(true,  "OTE Zones",             group=GRP_DISP)
+i_showPO3    = input.bool(true,  "PO3 Phase Labels",      group=GRP_DISP)
+i_showPDBox  = input.bool(true,  "Premium/Discount Zones",group=GRP_DISP)
+i_showTable  = input.bool(true,  "Info Table",            group=GRP_DISP)
+
+GRP_STRAT = "Strategy"
+i_tradeDir   = input.string("Both","Trade Direction",
+                     options=["Both","Long Only","Short Only"], group=GRP_STRAT)
+i_entryMode  = input.string("OTE 0.705","Entry Mode",
+                     options=["OTE 0.705","OTE 0.62","OTE 0.79","FVG CE","CISD Level"],
+                     group=GRP_STRAT,
+                     tooltip="OTE 0.705 = preferred ICT entry. FVG CE = central encroachment fallback.")
+i_useHTFGate = input.bool(true, "HTF Alignment Gate",
+                     tooltip="Block if Daily/4H/1H structures conflict or oppose sweep direction",
+                     group=GRP_STRAT)
+
+// ============================================================================
+// SECTION 2 — SESSION & TIME
+// ============================================================================
+
+nyHour  = hour(time,    "America/New_York")
+nyMin   = minute(time,  "America/New_York")
+nyHourP = hour(time[1], "America/New_York")
+nyDay   = dayofweek(time, "America/New_York")
+nyTime  = nyHour * 60 + nyMin
+
+// ICT killzone windows (precise per 2022 Mentorship)
+isAsiaKZ   = nyTime >= 1140 or nyTime < 60          // 7:00 PM – 1:00 AM
+isLondonKZ = nyTime >= 120  and nyTime < 300         // 2:00 AM – 5:00 AM
+isNYAMKZ   = nyTime >= 510  and nyTime < 660         // 8:30 AM – 11:00 AM
+isNYPMKZ   = nyTime >= 810  and nyTime < 960         // 1:30 PM – 4:00 PM
+isAnyKZ    = isLondonKZ or isNYAMKZ
+isPMCont   = i_allowPMCont and isNYPMKZ
+
+// Entry time gate:
+//   Reversals always require Killzone (London or NY AM)
+//   Continuations allowed in NY PM
+entryKZOK = i_useKZOnly ? (isAnyKZ or isPMCont) : true
+
+is930Open  = nyHour == 9 and nyMin == 30 and nyHourP != 9
+isMidnight = nyHour == 0 and nyMin == 0  and nyHourP != 0
+
+validDay = true
+if i_dayFilter == "Tue-Thu Only"
+    validDay := nyDay >= dayofweek.tuesday and nyDay <= dayofweek.thursday
+if i_dayFilter == "Tue-Wed Only"
+    validDay := nyDay == dayofweek.tuesday or nyDay == dayofweek.wednesday
+
+newDay  = timeframe.change("D")
+newWeek = timeframe.change("W")
+tickSz  = syminfo.mintick
+eqTol   = i_eqTicks * tickSz
+
+// ============================================================================
+// SECTION 3 — CHART TF VISIBILITY
+// ============================================================================
+
+_chartSec = timeframe.in_seconds()
+_vis15m   = _chartSec <= 900
+_vis1h    = _chartSec <= 3600
+_vis4h    = _chartSec <= 14400
+_visD     = true
+
+// ============================================================================
+// SECTION 4 — MULTI-TF DATA (security calls)
+// ============================================================================
+
+// --- 1M: precision execution data ---
+f_1m_data(_len) =>
+    _ph  = ta.pivothigh(high, _len, _len)
+    _pl  = ta.pivotlow(low,  _len, _len)
+    // Rolling highest high and lowest low over MSS lookback (for swing break detection)
+    _mssH = ta.highest(high, _len)
+    _mssL = ta.lowest(low,   _len)
+    [_ph, _pl, _mssH, _mssL, open, close, high, low]
+
+[ph1m, pl1m, mssH1m, mssL1m, open1m, close1m, high1m, low1m] =
+     request.security(syminfo.tickerid, "1", f_1m_data(i_sw1m),
+     lookahead=barmerge.lookahead_off)
+
+// --- 5M: CISD delivery context ---
+f_5m_data(_len) =>
+    _ph     = ta.pivothigh(high, _len, _len)
+    _pl     = ta.pivotlow(low,  _len, _len)
+    _phBody = not na(_ph) ? math.max(open[_len], close[_len]) : float(na)
+    _plBody = not na(_pl) ? math.min(open[_len], close[_len]) : float(na)
+    _avgBdy = ta.sma(math.abs(close - open), 10)
+    _curBdy = math.abs(close - open)
+    [_ph, _pl, _phBody, _plBody, open, close, high, low]
+
+f_5m_body(_len) =>
+    _avgBdy = ta.sma(math.abs(close - open), 10)
+    _curBdy = math.abs(close - open)
+    [_avgBdy, _curBdy]
+
+[ph5m, pl5m, ph5mBody, pl5mBody, open5m, close5m, high5m, low5m] =
+     request.security(syminfo.tickerid, "5", f_5m_data(i_sw5m),
+     lookahead=barmerge.lookahead_off)
+
+[avgBody5m, curBody5m] =
+     request.security(syminfo.tickerid, "5", f_5m_body(i_sw5m),
+     lookahead=barmerge.lookahead_off)
+
+// --- 15M: MSS confirmation (bellwether swings) ---
+f_15m_data(_len) =>
+    _ph   = ta.pivothigh(high, _len, _len)
+    _pl   = ta.pivotlow(low,  _len, _len)
+    _mssH = ta.highest(high, _len)
+    _mssL = ta.lowest(low,   _len)
+    [_ph, _pl, _mssH, _mssL, close, high, low]
+
+f_15m_body(_len) =>
+    _avgBdy = ta.sma(math.abs(close - open), 10)
+    _curBdy = math.abs(close - open)
+    [_avgBdy, _curBdy]
+
+[ph15m, pl15m, mssH15m, mssL15m, close15m, high15m, low15m] =
+     request.security(syminfo.tickerid, "15", f_15m_data(i_sw15m),
+     lookahead=barmerge.lookahead_off)
+
+[avgBody15m, curBody15m] =
+     request.security(syminfo.tickerid, "15", f_15m_body(i_sw15m),
+     lookahead=barmerge.lookahead_off)
+
+// --- 1H: Dealing range (premium/discount), HTF structure, parent FVG ---
+f_1h_data(_len) =>
+    _ph    = ta.pivothigh(high, _len, _len)
+    _pl    = ta.pivotlow(low,  _len, _len)
+    _mssH  = ta.highest(high, _len)
+    _mssL  = ta.lowest(low,   _len)
+    [_ph, _pl, _mssH, _mssL, open, close, high, low]
+
+f_1h_fvg() =>
+    _bFVG = low > high[2] and close > open
+    _rFVG = high < low[2] and close < open
+    [_bFVG, _rFVG]
+
+[ph1h, pl1h, mssH1h, mssL1h, open1h, close1h, high1h, low1h] =
+     request.security(syminfo.tickerid, "60", f_1h_data(i_sw1h),
+     lookahead=barmerge.lookahead_off)
+
+[parentBullFVG, parentBearFVG] =
+     request.security(syminfo.tickerid, "60", f_1h_fvg(),
+     lookahead=barmerge.lookahead_off)
+
+// --- 4H: HTF structure ---
+[ph4h, pl4h, mssH4h, mssL4h] = request.security(syminfo.tickerid, "240",
+     [ta.pivothigh(high, i_sw4h, i_sw4h),
+      ta.pivotlow(low,  i_sw4h, i_sw4h),
+      ta.highest(high, i_sw4h),
+      ta.lowest(low,   i_sw4h)],
+     lookahead=barmerge.lookahead_off)
+
+// --- Daily: HTF structure + prior day levels ---
+[phD, plD] = request.security(syminfo.tickerid, "D",
+     [ta.pivothigh(high, i_swD, i_swD), ta.pivotlow(low, i_swD, i_swD)],
+     lookahead=barmerge.lookahead_off)
+
+[prevDH, prevDL, prevDO, prevDC] = request.security(syminfo.tickerid, "D",
+     [high[1], low[1], open[1], close[1]], lookahead=barmerge.lookahead_on)
+
+[prevWH, prevWL] = request.security(syminfo.tickerid, "W",
+     [high[1], low[1]], lookahead=barmerge.lookahead_on)
+
+// ============================================================================
+// SECTION 5 — SESSION VISUALS
+// ============================================================================
+
+bgcolor(i_showSessions and isAsiaKZ   ? i_colAsiaKZ   : na, title="Asia BG")
+bgcolor(i_showSessions and isLondonKZ ? i_colLondonKZ : na, title="London BG")
+bgcolor(i_showSessions and isNYAMKZ   ? i_colNYKZ     : na, title="NY AM BG")
+bgcolor(i_showSessions and isNYPMKZ   ? i_colNYPMKZ   : na, title="NY PM BG")
+
+var line nyOpenLine   = na
+var line midnightLine = na
+
+if is930Open and i_showOpenLines
+    if not na(nyOpenLine)
+        line.delete(nyOpenLine)
+    nyOpenLine := line.new(bar_index, open, bar_index, open,
+         color=color.new(#ff9800,30), width=1, style=line.style_dashed, extend=extend.right)
+    label.new(bar_index, open, "9:30 Open",
+         color=color.new(color.black,100), textcolor=color.new(#ff9800,30),
+         style=label.style_label_left, size=size.tiny)
+
+if isMidnight and i_showOpenLines
+    if not na(midnightLine)
+        line.delete(midnightLine)
+    midnightLine := line.new(bar_index, open, bar_index, open,
+         color=color.new(#607d8b,40), width=1, style=line.style_dotted, extend=extend.right)
+
+if not na(nyOpenLine)
+    line.set_x2(nyOpenLine,   bar_index)
+if not na(midnightLine)
+    line.set_x2(midnightLine, bar_index)
+
+if newDay
+    if not na(nyOpenLine)
+        line.delete(nyOpenLine)
+    if not na(midnightLine)
+        line.delete(midnightLine)
+    nyOpenLine   := na
+    midnightLine := na
+
+// ============================================================================
+// SECTION 6 — SESSION KILLZONE H/L LEVELS (liquidity reference)
+// ============================================================================
+
+var float asiaHi   = na
+var float asiaLo   = na
+var float londonHi = na
+var float londonLo = na
+var float nyAMHi   = na
+var float nyAMLo   = na
+var float nyPMHi   = na
+var float nyPMLo   = na
+
+var array<line>  sess_ln = array.new<line>()
+var array<float> sess_px = array.new<float>()
+var array<int>   sess_br = array.new<int>()
+var array<bool>  sess_hi = array.new<bool>()
+var array<bool>  sess_sw = array.new<bool>()
+
+f_addSessLiq(_price, _isHigh, _lbl, _col) =>
+    if not na(_price)
+        _ln = line.new(bar_index, _price, bar_index, _price,
+             color=_col, width=1, style=line.style_dashed, extend=extend.right)
+        label.new(bar_index, _price, _lbl,
+             color=color.new(color.black,100), textcolor=_col,
+             style=_isHigh ? label.style_label_down : label.style_label_up, size=size.tiny)
+        if array.size(sess_ln) >= 30
+            _old = array.shift(sess_ln)
+            line.delete(_old)
+            array.shift(sess_px)
+            array.shift(sess_br)
+            array.shift(sess_hi)
+            array.shift(sess_sw)
+        array.push(sess_ln, _ln)
+        array.push(sess_px, _price)
+        array.push(sess_br, bar_index)
+        array.push(sess_hi, _isHigh)
+        array.push(sess_sw, false)
+
+if isAsiaKZ
+    asiaHi := na(asiaHi) or high > asiaHi ? high : asiaHi
+    asiaLo := na(asiaLo) or low  < asiaLo ? low  : asiaLo
+if isLondonKZ
+    londonHi := na(londonHi) or high > londonHi ? high : londonHi
+    londonLo := na(londonLo) or low  < londonLo ? low  : londonLo
+if isNYAMKZ
+    nyAMHi := na(nyAMHi) or high > nyAMHi ? high : nyAMHi
+    nyAMLo := na(nyAMLo) or low  < nyAMLo ? low  : nyAMLo
+if isNYPMKZ
+    nyPMHi := na(nyPMHi) or high > nyPMHi ? high : nyPMHi
+    nyPMLo := na(nyPMLo) or low  < nyPMLo ? low  : nyPMLo
+
+if isAsiaKZ[1]   and not isAsiaKZ   and not na(asiaHi)
+    f_addSessLiq(asiaHi,   true,  "Asia H",    color.new(#607d8b,0))
+    f_addSessLiq(asiaLo,   false, "Asia L",    color.new(#607d8b,0))
+    asiaHi   := na
+    asiaLo   := na
+if isLondonKZ[1] and not isLondonKZ and not na(londonHi)
+    f_addSessLiq(londonHi, true,  "London H",  color.new(#2196f3,0))
+    f_addSessLiq(londonLo, false, "London L",  color.new(#2196f3,0))
+    londonHi := na
+    londonLo := na
+if isNYAMKZ[1]   and not isNYAMKZ   and not na(nyAMHi)
+    f_addSessLiq(nyAMHi,   true,  "NY AM H",   color.new(#ff9800,0))
+    f_addSessLiq(nyAMLo,   false, "NY AM L",   color.new(#ff9800,0))
+    nyAMHi   := na
+    nyAMLo   := na
+if isNYPMKZ[1]   and not isNYPMKZ   and not na(nyPMHi)
+    f_addSessLiq(nyPMHi,   true,  "NY PM H",   color.new(#9c27b0,0))
+    f_addSessLiq(nyPMLo,   false, "NY PM L",   color.new(#9c27b0,0))
+    nyPMHi   := na
+    nyPMLo   := na
+
+// Session level sweep detection
+if array.size(sess_ln) > 0
+    for i = 0 to array.size(sess_ln) - 1
+        if not array.get(sess_sw, i) and bar_index > array.get(sess_br, i)
+            _px  = array.get(sess_px, i)
+            _hit = array.get(sess_hi, i) ? high >= _px : low <= _px
+            if _hit
+                array.set(sess_sw, i, true)
+                _ln = array.get(sess_ln, i)
+                line.set_style(_ln, line.style_dashed)
+                line.set_extend(_ln, extend.none)
+                line.set_x2(_ln, bar_index)
+
+if newDay
+    asiaHi := na
+    asiaLo := na
+    londonHi := na
+    londonLo := na
+    nyAMHi := na
+    nyAMLo := na
+    nyPMHi := na
+    nyPMLo := na
+
+// ============================================================================
+// SECTION 7 — PREVIOUS DAILY WICK GRADES + PDH/PDL + PWH/PWL
+// ============================================================================
+
+var box  wickPremBox = na
+var box  wickDiscBox = na
+var line pdHighLine  = na
+var line pdLowLine   = na
+var line pwHighLine  = na
+var line pwLowLine   = na
+
+if newDay
+    if not na(wickPremBox)
+        box.delete(wickPremBox)
+    if not na(wickDiscBox)
+        box.delete(wickDiscBox)
+    if not na(pdHighLine)
+        line.delete(pdHighLine)
+    if not na(pdLowLine)
+        line.delete(pdLowLine)
+    wickPremBox := na
+    wickDiscBox := na
+    pdHighLine  := na
+    pdLowLine   := na
+
+if newWeek
+    if not na(pwHighLine)
+        line.delete(pwHighLine)
+    if not na(pwLowLine)
+        line.delete(pwLowLine)
+    pwHighLine := na
+    pwLowLine := na
+
+if i_showWickGrade and not na(prevDH) and _chartSec < 86400
+    _bodyTop = math.max(prevDO, prevDC)
+    _bodyBot = math.min(prevDO, prevDC)
+    if na(wickPremBox) and prevDH > _bodyTop
+        wickPremBox := box.new(bar_index, prevDH, bar_index, _bodyTop,
+             bgcolor=i_colWickPrem, border_color=color.new(color.red,80), border_width=0,
+             extend=extend.right, text="Prev Daily Wick Grade",
+             text_color=color.new(color.red,50), text_size=size.tiny, text_halign=text.align_left)
+    if na(wickDiscBox) and _bodyBot > prevDL
+        wickDiscBox := box.new(bar_index, _bodyBot, bar_index, prevDL,
+             bgcolor=i_colWickDisc, border_color=color.new(color.green,80), border_width=0,
+             extend=extend.right, text="Prev Daily Wick Grade",
+             text_color=color.new(color.green,50), text_size=size.tiny, text_halign=text.align_left)
+
+if i_showPDHL and not na(prevDH) and _chartSec < 86400
+    if na(pdHighLine)
+        pdHighLine := line.new(bar_index, prevDH, bar_index, prevDH,
+             color=i_colPDHL, width=2, style=line.style_dashed, extend=extend.right)
+        label.new(bar_index, prevDH, "PDH",
+             color=color.new(color.black,100), textcolor=i_colPDHL,
+             style=label.style_label_left, size=size.tiny)
+    if na(pdLowLine)
+        pdLowLine := line.new(bar_index, prevDL, bar_index, prevDL,
+             color=i_colPDHL, width=2, style=line.style_dashed, extend=extend.right)
+        label.new(bar_index, prevDL, "PDL",
+             color=color.new(color.black,100), textcolor=i_colPDHL,
+             style=label.style_label_left, size=size.tiny)
+
+if i_showPWHL and not na(prevWH) and _chartSec < 604800
+    if na(pwHighLine)
+        pwHighLine := line.new(bar_index, prevWH, bar_index, prevWH,
+             color=i_colPWHL, width=1, style=line.style_dashed, extend=extend.right)
+        label.new(bar_index, prevWH, "PWH",
+             color=color.new(color.black,100), textcolor=i_colPWHL,
+             style=label.style_label_left, size=size.tiny)
+    if na(pwLowLine)
+        pwLowLine := line.new(bar_index, prevWL, bar_index, prevWL,
+             color=i_colPWHL, width=1, style=line.style_dashed, extend=extend.right)
+        label.new(bar_index, prevWL, "PWL",
+             color=color.new(color.black,100), textcolor=i_colPWHL,
+             style=label.style_label_left, size=size.tiny)
+
+// ============================================================================
+// SECTION 8 — PREMIUM / DISCOUNT ZONES (1H Dealing Range)
+// ============================================================================
+// Premium = top 25%    → favor shorts (delivery from premium)
+// Discount = bottom 25%→ favor longs  (delivery from discount)
+// EQ = 50% midpoint of the 1H swing range
+
+var float h1RangeHi = na
+var float h1RangeLo = na
+var float h1EQ      = na
+var float h1Prem75  = na   // 75% level = floor of premium zone
+var float h1Disc25  = na   // 25% level = ceiling of discount zone
+var string pdZone   = "—"
+var float _lastH1SH = na
+var float _lastH1SL = na
+var box   premZoneBox = na
+var box   discZoneBox = na
+
+if not na(ph1h) and ph1h != _lastH1SH
+    _lastH1SH := ph1h
+if not na(pl1h) and pl1h != _lastH1SL
+    _lastH1SL := pl1h
+
+if not na(_lastH1SH) and not na(_lastH1SL) and _lastH1SH > _lastH1SL
+    h1RangeHi := _lastH1SH
+    h1RangeLo := _lastH1SL
+    h1EQ      := (_lastH1SH + _lastH1SL) / 2.0
+    h1Prem75  := _lastH1SL + (_lastH1SH - _lastH1SL) * 0.75
+    h1Disc25  := _lastH1SL + (_lastH1SH - _lastH1SL) * 0.25
+    pdZone    := close > h1Prem75 ? "Premium" : close < h1Disc25 ? "Discount" : "Equilibrium"
+
+if i_showPDBox and not na(h1Prem75) and newDay
+    if not na(premZoneBox)
+        box.delete(premZoneBox)
+    if not na(discZoneBox)
+        box.delete(discZoneBox)
+    premZoneBox := box.new(bar_index, h1RangeHi, bar_index, h1Prem75,
+         bgcolor=i_colPremZone, border_color=color.new(color.red,70), border_width=0,
+         extend=extend.right, text="Premium",
+         text_color=color.new(color.red,40), text_size=size.tiny, text_halign=text.align_left)
+    discZoneBox := box.new(bar_index, h1Disc25, bar_index, h1RangeLo,
+         bgcolor=i_colDiscZone, border_color=color.new(color.green,70), border_width=0,
+         extend=extend.right, text="Discount",
+         text_color=color.new(color.green,40), text_size=size.tiny, text_halign=text.align_left)
+
+// ============================================================================
+// SECTION 9 — LIQUIDITY MAP (MTF Swing Levels + EQH/EQL)
+// ============================================================================
+
+var array<line>  liq_ln  = array.new<line>()
+var array<float> liq_px  = array.new<float>()
+var array<int>   liq_br  = array.new<int>()
+var array<bool>  liq_hi  = array.new<bool>()
+var array<bool>  liq_sw  = array.new<bool>()
+var array<int>   liq_tf  = array.new<int>()
+var array<bool>  liq_eq  = array.new<bool>()
+
+var float lastPH15 = na
+var float lastPL15 = na
+var float lastPH1h = na
+var float lastPL1h = na
+var float lastPH4h = na
+var float lastPL4h = na
+var float lastPHD  = na
+var float lastPLD  = na
+
+f_addLiq(_price, _isHigh, _tfTag) =>
+    if not na(_price)
+        _col       = _isHigh ? i_colBSL : i_colSSL
+        conflFound = false
+        if array.size(liq_ln) > 0
+            for i = 0 to array.size(liq_ln) - 1
+                if not array.get(liq_sw, i)
+                    _existPx  = array.get(liq_px, i)
+                    _existHi  = array.get(liq_hi, i)
+                    if _existHi == _isHigh and math.abs(_existPx - _price) <= eqTol
+                        _ln = array.get(liq_ln, i)
+                        line.set_width(_ln, i_lineWidth + 2)
+                        line.set_color(_ln, color.new(color.white, 0))
+                        array.set(liq_eq, i, true)
+                        conflFound := true
+                        break
+        if not conflFound
+            startBar = bar_index
+            for i = 0 to 500
+                if bar_index - i >= 0
+                    if (_isHigh and high[i] == _price) or (not _isHigh and low[i] == _price)
+                        startBar := bar_index - i
+                        break
+            _tfStr   = _tfTag == 1440 ? "D" : _tfTag == 240 ? "4H" : _tfTag == 60 ? "1H" : "15m"
+            _sideStr = _isHigh ? "BSL" : "SSL"
+            _newLine = line.new(startBar, _price, bar_index, _price,
+                 color=_col, width=i_lineWidth, style=line.style_solid, extend=extend.right)
+            label.new(startBar, _price, _sideStr + " " + _tfStr,
+                 color=color.new(color.black,100), textcolor=_col,
+                 style=_isHigh ? label.style_label_down : label.style_label_up, size=size.tiny)
+            if array.size(liq_ln) >= i_maxLevels
+                _old = array.shift(liq_ln)
+                line.delete(_old)
+                array.shift(liq_px)
+                array.shift(liq_br)
+                array.shift(liq_hi)
+                array.shift(liq_sw)
+                array.shift(liq_tf)
+                array.shift(liq_eq)
+            array.push(liq_ln, _newLine)
+            array.push(liq_px, _price)
+            array.push(liq_br, startBar)
+            array.push(liq_hi, _isHigh)
+            array.push(liq_sw, false)
+            array.push(liq_tf, _tfTag)
+            array.push(liq_eq, false)
+
+if not na(ph15m) and (na(lastPH15) or ph15m != lastPH15) and i_show15m and _vis15m
+    lastPH15 := ph15m
+    f_addLiq(ph15m, true,  15)
+if not na(pl15m) and (na(lastPL15) or pl15m != lastPL15) and i_show15m and _vis15m
+    lastPL15 := pl15m
+    f_addLiq(pl15m, false, 15)
+if not na(ph1h) and (na(lastPH1h) or ph1h != lastPH1h) and i_show1h and _vis1h
+    lastPH1h := ph1h
+    f_addLiq(ph1h,  true,  60)
+if not na(pl1h) and (na(lastPL1h) or pl1h != lastPL1h) and i_show1h and _vis1h
+    lastPL1h := pl1h
+    f_addLiq(pl1h,  false, 60)
+if not na(ph4h) and (na(lastPH4h) or ph4h != lastPH4h) and i_show4h and _vis4h
+    lastPH4h := ph4h
+    f_addLiq(ph4h,  true,  240)
+if not na(pl4h) and (na(lastPL4h) or pl4h != lastPL4h) and i_show4h and _vis4h
+    lastPL4h := pl4h
+    f_addLiq(pl4h,  false, 240)
+if not na(phD) and (na(lastPHD) or phD != lastPHD) and i_showD
+    lastPHD := phD
+    f_addLiq(phD,   true,  1440)
+if not na(plD) and (na(lastPLD) or plD != lastPLD) and i_showD
+    lastPLD := plD
+    f_addLiq(plD,   false, 1440)
+
+// ============================================================================
+// SECTION 10 — HTF STRUCTURE (1D > 4H > 1H: ICT top-down hierarchy)
+// ============================================================================
+
+var float dSH1 = na
+var float dSH2 = na
+var float dSL1 = na
+var float dSL2 = na
+var float h4SH1 = na
+var float h4SH2 = na
+var float h4SL1 = na
+var float h4SL2 = na
+var float h1SH1 = na
+var float h1SH2 = na
+var float h1SL1 = na
+var float h1SL2 = na
+
+if not na(phD)  and phD  != dSH1
+    dSH2  := dSH1
+    dSH1  := phD
+if not na(plD)  and plD  != dSL1
+    dSL2  := dSL1
+    dSL1  := plD
+if not na(ph4h) and ph4h != h4SH1
+    h4SH2 := h4SH1
+    h4SH1 := ph4h
+if not na(pl4h) and pl4h != h4SL1
+    h4SL2 := h4SL1
+    h4SL1 := pl4h
+if not na(ph1h) and ph1h != h1SH1
+    h1SH2 := h1SH1
+    h1SH1 := ph1h
+if not na(pl1h) and pl1h != h1SL1
+    h1SL2 := h1SL1
+    h1SL1 := pl1h
+
+// Structure bias: 1=Bull(HH+HL), -1=Bear(LH+LL), 0=Range
+f_struct(_sh1, _sh2, _sl1, _sl2) =>
+    _r = 0
+    if not na(_sh1) and not na(_sh2) and not na(_sl1) and not na(_sl2)
+        if _sh1 > _sh2 and _sl1 > _sl2
+            _r :=  1
+        else if _sh1 < _sh2 and _sl1 < _sl2
+            _r := -1
+    _r
+
+dailyStruct = f_struct(dSH1,  dSH2,  dSL1,  dSL2)
+h4Struct    = f_struct(h4SH1, h4SH2, h4SL1, h4SL2)
+h1Struct    = f_struct(h1SH1, h1SH2, h1SL1, h1SL2)
+
+_d4hConf  = (dailyStruct == 1 and h4Struct == -1) or (dailyStruct == -1 and h4Struct == 1)
+_d1hConf  = (dailyStruct == 1 and h1Struct == -1) or (dailyStruct == -1 and h1Struct == 1)
+_4h1hConf = (h4Struct    == 1 and h1Struct == -1) or (h4Struct    == -1 and h1Struct == 1)
+htfConflict = _d4hConf or _d1hConf or _4h1hConf
+htfBias     = dailyStruct != 0 ? dailyStruct : h4Struct != 0 ? h4Struct : h1Struct
+
+// ============================================================================
+// SECTION 11 — DISPLACEMENT DETECTION (body-based, no ATR)
+// ============================================================================
+// ICT definition: 3+ consecutive same-direction closes, each body > 2× avg body
+
+avgBodyChart = ta.sma(math.abs(close - open), i_dispBodyAvg)
+
+var int consecBullDisp = 0
+var int consecBearDisp = 0
+
+_curBodyC   = math.abs(close - open)
+_isLargeC   = _curBodyC > 2.0 * avgBodyChart
+
+if _isLargeC and close > open
+    consecBullDisp += 1
+    consecBearDisp := 0
+else if _isLargeC and close < open
+    consecBearDisp += 1
+    consecBullDisp := 0
+else
+    consecBullDisp := 0
+    consecBearDisp := 0
+
+inBullDisp = consecBullDisp >= i_dispBars
+inBearDisp = consecBearDisp >= i_dispBars
+
+// 5M displacement (for sweep validation and PO3)
+var int consec5mBull = 0
+var int consec5mBear = 0
+var float prev5mClose = na
+new5mBar = not na(close5m) and (na(prev5mClose) or close5m != prev5mClose)
+if new5mBar
+    _5mLarge = curBody5m > 2.0 * avgBody5m
+    if _5mLarge and close5m > open5m
+        consec5mBull += 1
+        consec5mBear := 0
+    else if _5mLarge and close5m < open5m
+        consec5mBear += 1
+        consec5mBull := 0
+    else
+        consec5mBull := 0
+        consec5mBear := 0
+    prev5mClose := close5m
+
+in5mBullDisp = consec5mBull >= i_dispBars
+in5mBearDisp = consec5mBear >= i_dispBars
+
+// ============================================================================
+// SECTION 12 — PO3 PHASE DETECTION
+// ============================================================================
+// Accumulation: no large bodies, price ranging
+// Manipulation: sweep of external liquidity (set externally at sweep event)
+// Distribution: 3+ displacement bodies driving price from swept level
+// Transition: distribution ended, awaiting next accumulation
+
+var string po3Phase = "Accumulation"
+
+_lowVol = not inBullDisp and not inBearDisp and consecBullDisp == 0 and consecBearDisp == 0
+if _lowVol
+    po3Phase := "Accumulation"
+else if inBullDisp or inBearDisp
+    po3Phase := "Distribution"
+// Manipulation is set in Section 14 when sweep fires
+// po3Phase stays "Manipulation" until displacement begins → then "Distribution"
+
+// ============================================================================
+// SECTION 13 — 15M MSS TRACKING (bellwether confirmation layer)
+// ============================================================================
+// MSS on 15M = close through the swing high/low of the last i_mssBars bars
+// This is the FIRST required confirmation after the 5M displacement sweep.
+// Without 15M MSS, no 1M trigger is checked → no trade.
+//
+// 15M MSS Bearish: close15m < lowest low of last N 15m bars (breaks recent swing low)
+// 15M MSS Bullish: close15m > highest high of last N 15m bars (breaks recent swing high)
+//
+// We track state here and export flags for use in the engine.
+
+var int   mss15mDir     = 0       // 1=bullish MSS, -1=bearish MSS, 0=none
+var int   mss15mBar     = 0       // chart bar when 15M MSS last fired
+var float mss15mLevel   = na      // the swing that was broken
+var bool  mss15mBull    = false
+var bool  mss15mBear    = false
+
+// Detect 15M MSS on each new 15M bar
+var float prev15mClose  = na
+new15mBar = not na(close15m) and (na(prev15mClose) or close15m != prev15mClose)
+
+if new15mBar
+    // Bullish 15M MSS: 15M close breaks above recent swing high
+    if close15m > mssH15m[1]      // [1] = previous 15m bar's highest high window
+        mss15mBull  := true
+        mss15mBear  := false
+        mss15mDir   := 1
+        mss15mLevel := mssH15m[1]
+        mss15mBar   := bar_index
+    // Bearish 15M MSS: 15M close breaks below recent swing low
+    else if close15m < mssL15m[1]
+        mss15mBear  := true
+        mss15mBull  := false
+        mss15mDir   := -1
+        mss15mLevel := mssL15m[1]
+        mss15mBar   := bar_index
+    prev15mClose := close15m
+
+// MSS remains valid for a configurable number of chart bars after firing
+mss15mValid     = (bar_index - mss15mBar) <= i_huntTimeout
+mss15mBullValid = mss15mBull and mss15mDir == 1  and mss15mValid
+mss15mBearValid = mss15mBear and mss15mDir == -1 and mss15mValid
+
+
+// ============================================================================
+// SECTION 14 — STATE MACHINE
+// ============================================================================
+// States:
+//   0 = IDLE
+//   1 = TURTLE_SOUP  (sweep detected, waiting for close-back / failed break)
+//   2 = SWEEP_CONF   (failed break confirmed, waiting for 5M displacement)
+//   3 = DISP_CONF    (5M displacement confirmed, waiting for 15M MSS)
+//   4 = MSS15_CONF   (15M MSS confirmed, waiting for 1M MSS trigger)
+//   5 = FVG_ENTRY    (1M MSS fired, searching for SIBI/BISI FVG)
+//   6 = FILLED       (position live)
+
+var int   engState      = 0
+var int   huntDir       = 0         // 1=bull, -1=bear
+var int   huntSrcTF     = 0
+var float sweepPrice    = na        // the liquidity level swept
+var float sweepExtreme  = na        // actual wick high/low of sweep bar
+var int   sweepBar      = 0
+var int   stateBar      = 0         // bar when state last changed
+
+// Turtle Soup: close-back tracking
+var int   sweepBarsBack = 0         // bars since sweep, for failed-break window
+
+// 1M MSS tracking (script-scope — var must not be inside an if block in Pine v6)
+var float prev1mClose = na
+
+// CISD / structure
+var float last5mSH      = na
+var float last5mSL      = na
+var float last5mSHBody  = na
+var float last5mSLBody  = na
+// CISD vars declared before Section 13b (see above)
+
+// FVG / OTE
+var float fvgTop        = na
+var float fvgBot        = na
+var float fvgCE         = na
+var int   fvgBar        = 0
+var string fvgType      = ""
+var bool   fvgIsParentValidated = false
+
+// Entry
+var float entryPrice    = na
+var float stopPrice     = na
+var float targetPrice   = na
+
+// Update 5M structure pivots
+if not na(ph5m)
+    last5mSH := ph5m
+    last5mSHBody := ph5mBody
+if not na(pl5m)
+    last5mSL := pl5m
+    last5mSLBody := pl5mBody
+
+// TF priority (for best sweep selection)
+f_tfPri(_tf) => _tf == 1440 ? 5 : _tf == 240 ? 4 : _tf == 60 ? 3 : _tf == 15 ? 2 : 1
+
+// CISD state vars (declared here, used in Section 13b logic below state machine vars)
+var float cisd_refSwing  = na
+var bool  cisd_armed     = false
+var int   cisd_armDir    = 0
+var int   cisd_armBar    = 0
+var float cisdLevel      = na
+var int   cisdBar        = 0
+var array<line>  cisd_ln = array.new<line>()
+var array<float> cisd_px = array.new<float>()
+var array<int>   cisd_br = array.new<int>()
+var array<bool>  cisd_hi = array.new<bool>()
+var array<bool>  cisd_sw = array.new<bool>()
+
+// ============================================================================
+// SECTION 13b — CISD DETECTION (independent visual, always-on)
+// ============================================================================
+// ICT CISD = Change in State of Delivery
+// Bear CISD: BSL (buyside) was swept → price then closes below the LAST swing low
+//            that formed BEFORE the sweep. That close = CISD bar.
+//            Draw a horizontal line at the LOW of that bar. Extend right.
+// Bull CISD: SSL (sellside) was swept → price closes above the last swing high
+//            before the sweep. Draw line at HIGH of that bar.
+//
+// Visual: solid line extending right. Label "CISD" in tiny inline style (no bubble).
+// When price returns to / crosses the CISD line → go dashed (touched).
+// Multiple CISD lines can exist simultaneously.
+//
+// CISD level is ALSO stored in cisdLevel for state machine reference.
+
+// Track the "reference swing" before the current sweep
+// We use the most recent pivot in the opposite direction to the sweep
+// Bear sweep (BSL taken): reference = last pivot LOW before the sweep bar
+// Bull sweep (SSL taken): reference = last pivot HIGH before the sweep bar
+
+// We detect CISD on the chart timeframe (not security call needed)
+// Trigger: engState transitions 0→1 sets sweepBar and huntDir
+// CISD fires: first bar after sweep where close breaks the pre-sweep swing
+
+
+// Arm CISD when a new sweep is detected (state 0→1 transition)
+if engState == 1 and engState[1] == 0
+    cisd_armed   := true
+    cisd_armDir  := huntDir
+    cisd_armBar  := bar_index
+    // Reference swing = most recent opposite-side pivot before this bar
+    // For bear CISD (huntDir=-1, BSL swept): ref = last pivot LOW
+    // For bull CISD (huntDir=1, SSL swept): ref = last pivot HIGH
+    if huntDir == -1
+        // Bear setup: we want the last swing LOW before the sweep
+        // Use pl15m (15m swing low) as reference — closest confirmed structure
+        cisd_refSwing := not na(pl15m) ? pl15m : not na(last5mSL) ? last5mSL : low[1]
+    else
+        // Bull setup: we want the last swing HIGH before the sweep
+        cisd_refSwing := not na(ph15m) ? ph15m : not na(last5mSH) ? last5mSH : high[1]
+
+// Disarm if state machine resets to IDLE without completing
+if engState == 0 and cisd_armed and (bar_index - cisd_armBar) > i_huntTimeout
+    cisd_armed    := false
+    cisd_refSwing := na
+
+// Detect CISD bar: first bar after sweep that CLOSES through the reference swing
+if cisd_armed and bar_index > cisd_armBar and not na(cisd_refSwing)
+    _cisdFired = false
+    _cisdPrice = float(na)
+    if cisd_armDir == -1 and close < cisd_refSwing   // Bear CISD: close below ref low
+        _cisdFired := true
+        _cisdPrice := low                             // CISD line at the LOW of this bar
+    else if cisd_armDir == 1 and close > cisd_refSwing  // Bull CISD: close above ref high
+        _cisdFired := true
+        _cisdPrice := high                            // CISD line at the HIGH of this bar
+
+    if _cisdFired
+        cisd_armed    := false      // disarm — only one CISD per sweep event
+        cisdLevel     := _cisdPrice // store for state machine reference
+        cisdBar       := bar_index
+
+        // Draw the CISD line
+        _cisdLn = line.new(bar_index, _cisdPrice, bar_index, _cisdPrice,
+             color=i_colCISD, width=1, style=line.style_solid, extend=extend.right)
+        // Tiny inline label — same style as BSL/SSL (no bubble)
+        _cisdDir = cisd_armDir
+        label.new(bar_index, _cisdPrice, "CISD",
+             color=color.new(color.black, 100), textcolor=i_colCISD,
+             style=_cisdDir == 1 ? label.style_label_down : label.style_label_up,
+             size=size.tiny)
+
+        // Store in arrays for sweep detection and line extension
+        if array.size(cisd_ln) >= 20  // keep max 20 CISD lines
+            _old = array.shift(cisd_ln)
+            line.delete(_old)
+            array.shift(cisd_px)
+            array.shift(cisd_br)
+            array.shift(cisd_hi)
+            array.shift(cisd_sw)
+        array.push(cisd_ln, _cisdLn)
+        array.push(cisd_px, _cisdPrice)
+        array.push(cisd_br, bar_index)
+        array.push(cisd_hi, cisd_armDir == 1)
+        array.push(cisd_sw, false)
+
+// Extend active CISD lines and detect when price returns to them
+if array.size(cisd_ln) > 0
+    for i = 0 to array.size(cisd_ln) - 1
+        if not array.get(cisd_sw, i)
+            _ln  = array.get(cisd_ln, i)
+            _px  = array.get(cisd_px, i)
+            _br  = array.get(cisd_br, i)
+            _isH = array.get(cisd_hi, i)
+            line.set_x2(_ln, bar_index)
+            // Touch detection: price returns to CISD level
+            if bar_index > _br
+                _touched = _isH ? low <= _px : high >= _px
+                if _touched
+                    array.set(cisd_sw, i, true)
+                    line.set_style(_ln, line.style_dashed)
+                    line.set_extend(_ln, extend.none)
+                    line.set_x2(_ln, bar_index)
+
+
+// ── STATE 0: IDLE — scan for Turtle Soup sweep ──────────────────────────────
+// Turtle Soup condition:
+//   • Wick of current bar breaches a liquidity level (no close requirement yet)
+//   • Close-back confirmation happens in State 1 (failed break check)
+
+var int  bestSweepIdx  = -1
+var int  bestSweepPri  = 0
+var bool sweepIsBull   = false  // SSL swept → bullish setup
+var bool sweepIsBear   = false  // BSL swept → bearish setup
+
+if engState == 0
+    bestSweepIdx := -1
+    bestSweepPri := 0
+    sweepIsBull  := false
+    sweepIsBear  := false
+
+    if array.size(liq_ln) > 0
+        for i = 0 to array.size(liq_ln) - 1
+            if not array.get(liq_sw, i) and bar_index > array.get(liq_br, i)
+                _px  = array.get(liq_px, i)
+                _hi  = array.get(liq_hi, i)
+                _pri = f_tfPri(array.get(liq_tf, i))
+                if _hi and high > _px               // wick above BSL → bearish TS
+                    if _pri > bestSweepPri
+                        bestSweepIdx := i
+                        bestSweepPri := _pri
+                        sweepIsBear  := true
+                        sweepIsBull  := false
+                if not _hi and low < _px            // wick below SSL → bullish TS
+                    if _pri > bestSweepPri
+                        bestSweepIdx := i
+                        bestSweepPri := _pri
+                        sweepIsBull  := true
+                        sweepIsBear  := false
+
+    // Also check PDH/PDL (highest priority = 6)
+    if i_showPDHL and not na(prevDH)
+        if high > prevDH and 6 > bestSweepPri
+            bestSweepIdx := -2
+            bestSweepPri := 6
+            sweepIsBear  := true
+            sweepIsBull := false
+        if low < prevDL and 6 > bestSweepPri
+            bestSweepIdx := -3
+            bestSweepPri := 6
+            sweepIsBull  := true
+            sweepIsBear := false
+
+    // Sweep detected → enter State 1, log the event
+    if bestSweepPri > 0
+        if sweepIsBull
+            huntDir      := 1
+            sweepExtreme := low
+            sweepPrice   := bestSweepIdx == -3 ? prevDL : array.get(liq_px, bestSweepIdx)
+            huntSrcTF    := bestSweepIdx == -3 ? 1441   : array.get(liq_tf, bestSweepIdx)
+        if sweepIsBear
+            huntDir      := -1
+            sweepExtreme := high
+            sweepPrice   := bestSweepIdx == -2 ? prevDH : array.get(liq_px, bestSweepIdx)
+            huntSrcTF    := bestSweepIdx == -2 ? 1441   : array.get(liq_tf, bestSweepIdx)
+
+        sweepBar      := bar_index
+        sweepBarsBack := 0
+        stateBar      := bar_index
+        engState      := 1
+        po3Phase      := "Manipulation"   // PO3: sweep = manipulation phase
+
+        // Mark the swept level dotted
+        if bestSweepIdx >= 0
+            array.set(liq_sw, bestSweepIdx, true)
+            _ln = array.get(liq_ln, bestSweepIdx)
+            line.set_style(_ln, line.style_dashed)
+            line.set_extend(_ln, extend.none)
+            line.set_x2(_ln, bar_index)
+        if bestSweepIdx == -2 and not na(pdHighLine)
+            line.set_style(pdHighLine, line.style_dashed)
+            line.set_extend(pdHighLine, extend.none)
+            line.set_x2(pdHighLine, bar_index)
+        if bestSweepIdx == -3 and not na(pdLowLine)
+            line.set_style(pdLowLine, line.style_dashed)
+            line.set_extend(pdLowLine, extend.none)
+            line.set_x2(pdLowLine, bar_index)
+
+        // Turtle Soup sweep label — small inline text, no bubble (same style as BSL/SSL)
+        if i_showTS
+            _tsY   = huntDir == 1 ? low : high
+            _tsSty = huntDir == 1 ? label.style_label_up : label.style_label_down
+            label.new(bar_index, _tsY, "TS",
+                 color=color.new(color.black, 100), textcolor=color.black,
+                 style=_tsSty, size=size.tiny)
+
+// ── STATE 1: TURTLE SOUP — wait for failed break (close back within range) ──
+// ICT: the sweep must FAIL — close must return inside the prior range
+// within i_tsFailBars bars. If close stays beyond the level → abort (trend run, not TS).
+
+if engState == 1
+    sweepBarsBack += 1
+
+    // Bullish TS: swept below SSL, waiting for close to recover above sweepPrice
+    closedBack = huntDir == 1 ? close > sweepPrice : close < sweepPrice
+
+    if closedBack
+        engState := 2
+        stateBar := bar_index
+        if i_showTS
+            label.new(bar_index, huntDir == 1 ? low : high, "TS Conf",
+                 color=color.new(color.black, 100), textcolor=color.black,
+                 style=huntDir == 1 ? label.style_label_up : label.style_label_down,
+                 size=size.tiny)
+    else if sweepBarsBack > i_tsFailBars
+        // Close did NOT return → this is a trending run, not a TS → abort
+        engState     := 0
+        huntDir      := 0
+        sweepPrice   := na
+        sweepExtreme := na
+
+// ── STATE 2: SWEEP CONF — wait for 5M displacement ──────────────────────────
+// After failed break: need 5M displacement (3+ large bodies) in sweep direction
+// This is the "institutional delivery" that drives price away from the raid level.
+
+if engState == 2 and bar_index > stateBar
+    dispOK = huntDir == 1 ? in5mBullDisp : in5mBearDisp
+    if dispOK
+        engState := 3
+        stateBar := bar_index
+        po3Phase := "Distribution"     // PO3: displacement = distribution phase
+        if i_showPO3
+            label.new(bar_index, huntDir == 1 ? low : high, "5M Disp",
+                 color=color.new(color.black, 100), textcolor=color.black,
+                 style=huntDir == 1 ? label.style_label_up : label.style_label_down,
+                 size=size.tiny)
+
+// ── STATE 3: DISP CONF — wait for 15M MSS ───────────────────────────────────
+// 15M MSS = bellwether confirmation that structure has shifted
+// Bullish hunt: need 15M bullish MSS (close through 15M swing high)
+// Bearish hunt: need 15M bearish MSS (close through 15M swing low)
+// ICT: "If no 15M MSS, LTF signals are noise — stand aside"
+// HTF gate is checked here: sweep direction must not oppose HTF bias
+
+if engState == 3 and bar_index > stateBar
+    // HTF check
+    htfOK = true
+    if i_useHTFGate
+        if htfConflict
+            htfOK := false
+        if htfBias == 1  and huntDir == -1
+            htfOK := false
+        if htfBias == -1 and huntDir == 1
+            htfOK := false
+
+    if not htfOK
+        // HTF blocks → abort
+        engState     := 0
+        huntDir      := 0
+        sweepPrice   := na
+        sweepExtreme := na
+    else
+        // Check 15M MSS alignment
+        mss15mAligned = (huntDir == 1 and mss15mBullValid) or (huntDir == -1 and mss15mBearValid)
+        if mss15mAligned
+            engState := 4
+            stateBar := bar_index
+            cisdLevel := huntDir == 1 ? last5mSHBody : last5mSLBody
+            cisdBar   := bar_index
+
+            // cisdLevel set here for state machine reference; CISD visual drawn in Section 13b
+
+// ── STATE 4: MSS15 CONF — wait for 1M MSS execution trigger ─────────────────
+// 1M MSS = precision trigger aligned with 15M MSS direction
+// Bullish: 1M close breaks above highest high of last N 1M bars
+// Bearish: 1M close breaks below lowest low of last N 1M bars
+// This is the bar where execution begins — FVG/OTE search starts HERE.
+//
+// Additional gates at this stage:
+//   • Premium/Discount: longs only from discount, shorts only from premium
+//   • Killzone: reversals require KZ; PM continuation allowed
+
+if engState == 4 and bar_index > stateBar
+    // Time + day filter
+    timeOK = entryKZOK and validDay
+
+    // Premium/Discount filter (ICT: longs from discount, shorts from premium)
+    pdOK = true
+    if not na(h1Prem75) and not na(h1Disc25)
+        if huntDir == 1  and close > h1EQ   // long above EQ — not ideal
+            pdOK := pdZone == "Discount" or pdZone == "Equilibrium"
+        if huntDir == -1 and close < h1EQ   // short below EQ — not ideal
+            pdOK := pdZone == "Premium"  or pdZone == "Equilibrium"
+
+    // Direction filter
+    dirOK = true
+    if i_tradeDir == "Long Only"  and huntDir != 1
+        dirOK := false
+    if i_tradeDir == "Short Only" and huntDir != -1
+        dirOK := false
+
+    // 1M MSS check: 1M close breaks the MSS window in sweep direction
+    // Note: mssH1m / mssL1m are the rolling highest/lowest over i_sw1m bars on 1M TF
+    new1mBar = not na(close1m) and (na(prev1mClose) or close1m != prev1mClose)
+    mss1mBull = close1m > mssH1m    // 1M close > highest high = bullish 1M MSS
+    mss1mBear = close1m < mssL1m    // 1M close < lowest low  = bearish 1M MSS
+    if new1mBar
+        prev1mClose := close1m
+
+    mss1mAligned = (huntDir == 1 and mss1mBull) or (huntDir == -1 and mss1mBear)
+
+    if mss1mAligned and timeOK and pdOK and dirOK
+        engState := 5
+        stateBar := bar_index
+        fvgType  := ""
+
+        if i_showTS
+            _1mMssSty = huntDir == 1 ? label.style_label_up : label.style_label_down
+            label.new(bar_index, huntDir == 1 ? low : high, "1M MSS",
+                 color=color.new(color.black, 100), textcolor=color.black,
+                 style=_1mMssSty, size=size.tiny)
+
+// ── STATE 5: FVG ENTRY — search for first presented SIBI/BISI ───────────────
+// SIBI = Sellside Imbalance Buyside Inefficiency (bearish 3-candle FVG):
+//        high[current] < low[2 bars ago] — gap between wick[2] and wick[0]
+//        ICT uses this to enter LONG (price fills the inefficiency upward)
+// BISI = Buyside Imbalance Sellside Inefficiency (bullish 3-candle FVG):
+//        low[current] > high[2 bars ago]
+//        ICT uses this to enter SHORT
+//
+// Parent FVG validation: a 1H FVG must overlap the entry FVG zone
+// (Episode 18: "No FVG, no OB" — LTF FVG must nest within HTF imbalance)
+//
+// OTE (Optimal Trade Entry): Fibonacci retracement of the displacement swing
+//   0.62, 0.705 (preferred), 0.79
+//   Entry limit placed at chosen OTE level within the SIBI/BISI zone
+
+// Standard 3-candle FVG detection (using chart bars for LTF precision)
+avgBodyFVG  = ta.sma(math.abs(close - open), i_dispBodyAvg)
+curBodyFVG  = math.abs(close - open)
+isDispBarFVG = curBodyFVG > 2.0 * avgBodyFVG
+
+// BISI (Bullish FVG): low > high[2], displacement candle goes up
+// Used for SHORT entries — price in the BISI is a premium to sell
+bisiFVG    = low > high[2] and close > open and isDispBarFVG   // bullish FVG = BISI
+bisiTop    = low
+bisiBot    = high[2]
+
+// SIBI (Bearish FVG): high < low[2], displacement candle goes down
+// Used for LONG entries — price in the SIBI is a discount to buy
+sibiFVG    = high < low[2] and close < open and isDispBarFVG   // bearish FVG = SIBI
+sibiTop    = low[2]
+sibiBot    = high
+
+// Displacement swing for OTE calculation
+// OTE reference: from sweepExtreme to the current structure break
+var float oteSwingHi = na
+var float oteSwingLo = na
+var box   oteBox     = na
+
+if engState == 5 and bar_index > stateBar
+    // Capture the swing extremes for OTE Fibonacci
+    // Long (bullish hunt): swing = sweepExtreme (low) to highest close since sweep
+    // Short (bearish hunt): swing = sweepExtreme (high) to lowest close since sweep
+    if huntDir == 1
+        oteSwingLo := sweepExtreme
+        oteSwingHi := ta.highest(close, i_huntTimeout)  // Pine v6: length must be simple series/const, not computed expression
+    if huntDir == -1
+        oteSwingHi := sweepExtreme
+        oteSwingLo := ta.lowest(close, i_huntTimeout)   // Pine v6: length must be simple series/const, not computed expression
+
+    // OTE levels (Fib retracement of the displacement swing)
+    _oteFib = i_entryMode == "OTE 0.62" ? 0.62 : i_entryMode == "OTE 0.79" ? 0.79 : 0.705
+    oteLevel = na(oteSwingHi) or na(oteSwingLo) ? float(na) :
+         huntDir == 1 ? oteSwingHi - (oteSwingHi - oteSwingLo) * _oteFib :
+         oteSwingLo + (oteSwingHi - oteSwingLo) * _oteFib
+
+    // First presented SIBI/BISI after 1M MSS
+    fvgFound   = false
+    _fvgTypeNew = ""
+
+    if huntDir == 1 and sibiFVG   // Long: looking for SIBI (bearish FVG = discount)
+        fvgTop     := sibiTop
+        fvgBot     := sibiBot
+        _fvgTypeNew := "SIBI"
+        fvgFound   := true
+    if huntDir == -1 and bisiFVG  // Short: looking for BISI (bullish FVG = premium)
+        fvgTop     := bisiTop
+        fvgBot     := bisiBot
+        _fvgTypeNew := "BISI"
+        fvgFound   := true
+
+    if fvgFound
+        fvgCE  := (fvgTop + fvgBot) / 2.0
+        fvgBar := bar_index
+        fvgType := _fvgTypeNew
+
+        // Parent FVG validation: does a 1H FVG overlap this FVG zone?
+        parentOverlap = false
+        if huntDir == 1 and parentBearFVG
+            parentOverlap := true   // 1H bearish FVG exists = discount on parent TF
+        if huntDir == -1 and parentBullFVG
+            parentOverlap := true   // 1H bullish FVG exists = premium on parent TF
+        // If parent FVG not yet validated, still take the trade but mark it
+        fvgIsParentValidated := parentOverlap
+
+        // FVG visual
+        if i_showFVG
+            _fvgCol  = huntDir == 1 ? i_colBISI : i_colSIBI
+            _fvgBord = huntDir == 1 ? color.new(#26a69a, 40) : color.new(#ef5350, 40)
+            _pvStr   = parentOverlap ? " ✓" : " (!)"
+            box.new(bar_index - 1, fvgTop, bar_index + 6, fvgBot,
+                 bgcolor=_fvgCol, border_color=_fvgBord, border_width=1,
+                 text=_fvgTypeNew + _pvStr,
+                 text_color=huntDir == 1 ? color.new(#26a69a, 0) : color.new(#ef5350, 0),
+                 text_size=size.tiny, text_halign=text.align_center)
+
+        // OTE zone visual
+        if i_showOTE and not na(oteLevel)
+            if not na(oteBox)
+                box.delete(oteBox)
+            _oteTop  = huntDir == 1 ? oteLevel * 1.0001 : oteLevel
+            _oteBot  = huntDir == 1 ? oteLevel           : oteLevel * 0.9999
+            oteBox  := box.new(bar_index, _oteTop, bar_index + 6, _oteBot,
+                 bgcolor=i_colOTE, border_color=color.new(#ffeb3b, 40), border_width=1,
+                 text="OTE " + str.tostring(_oteFib), text_color=color.new(#ffeb3b, 0),
+                 text_size=size.tiny, text_halign=text.align_center)
+
+        // Calculate entry price
+        if i_entryMode == "FVG CE"
+            entryPrice := fvgCE
+        else if i_entryMode == "CISD Level"
+            entryPrice := cisdLevel
+        else
+            // OTE: use Fib retracement level, clamped within FVG zone
+            entryPrice := not na(oteLevel) ? oteLevel : fvgCE
+
+        // Stop: sweep extreme (no buffer — ICT does not add buffer ticks)
+        stopPrice := sweepExtreme
+
+        // Target: nearest unswept opposite-side liquidity level
+        // Bullish: nearest BSL above entry
+        // Bearish: nearest SSL below entry
+        targetPrice := na
+        bestTargDist = float(na)
+        if array.size(liq_ln) > 0
+            for i = 0 to array.size(liq_ln) - 1
+                if not array.get(liq_sw, i)
+                    _px  = array.get(liq_px, i)
+                    _hi  = array.get(liq_hi, i)
+                    // Bullish: target = nearest BSL above entry
+                    if huntDir == 1 and _hi and _px > entryPrice
+                        _dist = _px - entryPrice
+                        if na(bestTargDist) or _dist < bestTargDist
+                            bestTargDist := _dist
+                            targetPrice  := _px
+                    // Bearish: target = nearest SSL below entry
+                    if huntDir == -1 and not _hi and _px < entryPrice
+                        _dist = entryPrice - _px
+                        if na(bestTargDist) or _dist < bestTargDist
+                            bestTargDist := _dist
+                            targetPrice  := _px
+
+        // Place the strategy limit order
+        if huntDir == 1
+            strategy.entry("Long", strategy.long, limit=entryPrice)
+            if not na(targetPrice)
+                strategy.exit("Long TP/SL", "Long", limit=targetPrice, stop=stopPrice)
+            if i_showTS
+                label.new(bar_index, entryPrice, "▲ Long",
+                     color=color.new(color.black, 100), textcolor=color.black,
+                     style=label.style_label_up, size=size.tiny)
+        if huntDir == -1
+            strategy.entry("Short", strategy.short, limit=entryPrice)
+            if not na(targetPrice)
+                strategy.exit("Short TP/SL", "Short", limit=targetPrice, stop=stopPrice)
+            if i_showTS
+                label.new(bar_index, entryPrice, "▼ Short",
+                     color=color.new(color.black, 100), textcolor=color.black,
+                     style=label.style_label_down, size=size.tiny)
+
+        engState := 6
+        stateBar := bar_index
+
+// ============================================================================
+// SECTION 15 — STATE RESET & MANAGEMENT
+// ============================================================================
+
+// f_resetState inlined at each call site (Pine v6: functions cannot write outer-scope vars)
+
+// Timeout: any non-FILLED state that lingers too long → reset
+if engState > 0 and engState < 6 and (bar_index - stateBar) > i_huntTimeout
+    engState             := 0
+    huntDir              := 0
+    sweepPrice           := na
+    sweepExtreme         := na
+    cisdLevel            := na
+    fvgTop               := na
+    fvgBot               := na
+    fvgCE                := na
+    fvgType              := ""
+    fvgIsParentValidated := false
+    entryPrice           := na
+    stopPrice            := na
+    targetPrice          := na
+    oteSwingHi           := na
+    oteSwingLo           := na
+    mss15mDir            := 0
+    mss15mBull           := false
+    mss15mBear           := false
+
+// Position closed → reset
+if engState == 6 and strategy.position_size == 0
+    engState             := 0
+    huntDir              := 0
+    sweepPrice           := na
+    sweepExtreme         := na
+    cisdLevel            := na
+    fvgTop               := na
+    fvgBot               := na
+    fvgCE                := na
+    fvgType              := ""
+    fvgIsParentValidated := false
+    entryPrice           := na
+    stopPrice            := na
+    targetPrice          := na
+    oteSwingHi           := na
+    oteSwingLo           := na
+    mss15mDir            := 0
+    mss15mBull           := false
+    mss15mBear           := false
+    // CISD lines persist independently; only cisdLevel reference cleared
+
+// Cancel unfilled orders after 20 bars in FILLED state with no position
+if engState == 6 and strategy.position_size == 0 and (bar_index - stateBar) > 20
+    strategy.cancel_all()
+    engState             := 0
+    huntDir              := 0
+    sweepPrice           := na
+    sweepExtreme         := na
+    cisdLevel            := na
+    fvgTop               := na
+    fvgBot               := na
+    fvgCE                := na
+    fvgType              := ""
+    fvgIsParentValidated := false
+    entryPrice           := na
+    stopPrice            := na
+    targetPrice          := na
+    oteSwingHi           := na
+    oteSwingLo           := na
+    mss15mDir            := 0
+    mss15mBull           := false
+    mss15mBear           := false
+
+// CISD lines are extended in Section 13b (array-managed)
+
+// ============================================================================
+// SECTION 16 — VISUAL SWEEP DETECTION (remaining unswept levels)
+// ============================================================================
+
+if array.size(liq_ln) > 0
+    for i = 0 to array.size(liq_ln) - 1
+        if not array.get(liq_sw, i) and bar_index > array.get(liq_br, i)
+            _px = array.get(liq_px, i)
+            _hi = array.get(liq_hi, i)
+            if (_hi and high >= _px) or (not _hi and low <= _px)
+                array.set(liq_sw, i, true)
+                _ln = array.get(liq_ln, i)
+                line.set_style(_ln, line.style_dashed)
+                line.set_extend(_ln, extend.none)
+                line.set_x2(_ln, bar_index)
+
+// ============================================================================
+// SECTION 17 — DRAW ON LIQUIDITY TARGET LINE
+// ============================================================================
+
+var line dolLine  = na
+var label dolLbl  = na
+
+if engState >= 1 and engState <= 5 and not na(targetPrice)
+    _dolCol = huntDir == 1 ? i_colBSL : i_colSSL
+    if na(dolLine)
+        dolLine := line.new(bar_index, targetPrice, bar_index, targetPrice,
+             color=_dolCol, width=1, style=line.style_arrow_right)
+        dolLbl  := label.new(bar_index, targetPrice,
+             "Draw on Liq → " + str.tostring(targetPrice, format.mintick),
+             color=color.new(color.black,100), textcolor=_dolCol,
+             style=label.style_label_left, size=size.tiny)
+    else
+        line.set_x2(dolLine, bar_index)
+
+if engState == 0 or engState == 6
+    if not na(dolLine)
+        line.delete(dolLine)
+    if not na(dolLbl)
+        label.delete(dolLbl)
+    dolLine := na
+    dolLbl := na
+
+// ============================================================================
+// SECTION 18 — ENTRY/EXIT PLOT SHAPES
+// ============================================================================
+
+plotshape(engState == 1 and engState[1] == 0 and huntDir == 1,
+     title="TS Bull Sweep",   style=shape.diamond, location=location.belowbar,
+     color=color.new(#26a69a, 0), size=size.tiny)
+plotshape(engState == 1 and engState[1] == 0 and huntDir == -1,
+     title="TS Bear Sweep",   style=shape.diamond, location=location.abovebar,
+     color=color.new(#ef5350, 0), size=size.tiny)
+plotshape(engState == 4 and engState[1] == 3,
+     title="15M MSS Confirm", style=shape.circle,  location=location.belowbar,
+     color=color.new(#2196f3, 0), size=size.tiny)
+plotshape(engState == 5 and engState[1] == 4,
+     title="1M MSS Trigger",  style=shape.triangleup, location=location.belowbar,
+     color=color.new(#ffeb3b, 0), size=size.small)
+
+// ============================================================================
+// SECTION 19 — INFO TABLE
+// ============================================================================
+
+// var must be at script scope in Pine v6 — cannot declare inside if block
+var table t = table.new(position.top_right, 2, 14,
+     bgcolor=color.new(#1a1a2e, 10),
+     border_color=color.new(#333333, 0), border_width=1,
+     frame_color=color.new(#333333, 0), frame_width=1)
+
+if i_showTable
+
+    // Header
+    table.cell(t, 0, 0, "ICT ENGINE v2", text_color=color.white,
+         text_size=size.small, bgcolor=color.new(#0f3460, 0))
+    table.cell(t, 1, 0, "STATUS", text_color=color.white,
+         text_size=size.small, bgcolor=color.new(#0f3460, 0))
+
+    // State
+    _stateStr = engState == 0 ? "IDLE" :
+         engState == 1 ? "1 · SWEEP" :
+         engState == 2 ? "2 · TS CONFIRMED" :
+         engState == 3 ? "3 · 5M DISP" :
+         engState == 4 ? "4 · 15M MSS ✓" :
+         engState == 5 ? "5 · 1M MSS → FVG" : "6 · IN POSITION"
+    _stateCol = engState == 0 ? color.gray :
+         engState == 1 ? color.orange :
+         engState == 2 ? color.yellow :
+         engState == 3 ? color.new(#ff9800, 0) :
+         engState == 4 ? color.blue :
+         engState == 5 ? color.lime : color.white
+    table.cell(t, 0, 1, "State", text_color=color.gray,   text_size=size.tiny)
+    table.cell(t, 1, 1, _stateStr, text_color=_stateCol,  text_size=size.tiny)
+
+    // Direction
+    _dirStr = huntDir == 1 ? "BULL ▲" : huntDir == -1 ? "BEAR ▼" : "—"
+    _dirCol = huntDir == 1 ? color.green : huntDir == -1 ? color.red : color.gray
+    table.cell(t, 0, 2, "Direction", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 2, _dirStr, text_color=_dirCol, text_size=size.tiny)
+
+    // PO3 Phase
+    _po3Col = po3Phase == "Distribution" ? color.lime :
+         po3Phase == "Manipulation" ? color.orange :
+         po3Phase == "Accumulation" ? color.gray : color.yellow
+    table.cell(t, 0, 3, "PO3 Phase", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 3, po3Phase, text_color=_po3Col, text_size=size.tiny)
+
+    // Premium/Discount
+    _pdCol = pdZone == "Premium" ? color.red : pdZone == "Discount" ? color.green : color.gray
+    table.cell(t, 0, 4, "P/D Zone", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 4, pdZone, text_color=_pdCol, text_size=size.tiny)
+
+    // Session
+    _sessStr = isNYAMKZ ? "NY AM KZ ★" : isLondonKZ ? "London KZ ★" :
+         isNYPMKZ ? "NY PM KZ" : isAsiaKZ ? "Asia" : "Off KZ"
+    _sessCol = isNYAMKZ ? color.orange : isLondonKZ ? color.blue :
+         isNYPMKZ ? color.purple : isAsiaKZ ? color.gray : color.new(color.gray,50)
+    table.cell(t, 0, 5, "Session", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 5, _sessStr, text_color=_sessCol, text_size=size.tiny)
+
+    // 15M MSS
+    _15mStr = mss15mBullValid ? "✓ BULL MSS" : mss15mBearValid ? "✓ BEAR MSS" : "— None"
+    _15mCol = mss15mBullValid ? color.green   : mss15mBearValid ? color.red    : color.gray
+    table.cell(t, 0, 6, "15M MSS", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 6, _15mStr, text_color=_15mCol, text_size=size.tiny)
+
+    // CISD
+    _cisdStr = not na(cisdLevel) ? str.tostring(cisdLevel, format.mintick) : "—"
+    table.cell(t, 0, 7, "CISD", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 7, _cisdStr, text_color=i_colCISD, text_size=size.tiny)
+
+    // FVG
+    _fvgStr = fvgType != "" and not na(fvgCE) ?
+         fvgType + " CE " + str.tostring(fvgCE, format.mintick) +
+         (fvgIsParentValidated ? " ✓" : " (!)") : "—"
+    table.cell(t, 0, 8, "FVG", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 8, _fvgStr, text_color=color.white, text_size=size.tiny)
+
+    // Entry
+    _entStr = not na(entryPrice) ? str.tostring(entryPrice, format.mintick) : "—"
+    table.cell(t, 0, 9, "Entry", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 9, _entStr, text_color=color.white, text_size=size.tiny)
+
+    // Stop
+    _stpStr = not na(stopPrice) ? str.tostring(stopPrice, format.mintick) : "—"
+    table.cell(t, 0, 10, "Stop (Sweep Ext.)", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 10, _stpStr, text_color=color.red, text_size=size.tiny)
+
+    // Target (nearest liquidity)
+    _tgtStr = not na(targetPrice) ? str.tostring(targetPrice, format.mintick) : "—"
+    table.cell(t, 0, 11, "Target (Liq)", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 11, _tgtStr, text_color=color.lime, text_size=size.tiny)
+
+    // HTF Alignment
+    _alignStr = htfConflict ? "⚠ CONFLICT" : htfBias == 1 ? "✓ BULL" : htfBias == -1 ? "✓ BEAR" : "— RANGE"
+    _alignCol = htfConflict ? color.red : htfBias != 0 ? color.lime : color.gray
+    _alignBg  = htfConflict ? color.new(color.red, 85) : color.new(#1a1a2e, 10)
+    table.cell(t, 0, 12, "HTF Align", text_color=color.new(#ff9800,0), text_size=size.tiny, bgcolor=_alignBg)
+    table.cell(t, 1, 12, _alignStr, text_color=_alignCol, text_size=size.tiny, bgcolor=_alignBg)
+
+    // HTF Structure breakdown
+    _dSym  = dailyStruct == 1 ? "▲" : dailyStruct == -1 ? "▼" : "—"
+    _4hSym = h4Struct    == 1 ? "▲" : h4Struct    == -1 ? "▼" : "—"
+    _1hSym = h1Struct    == 1 ? "▲" : h1Struct    == -1 ? "▼" : "—"
+    table.cell(t, 0, 13, "1D | 4H | 1H", text_color=color.gray, text_size=size.tiny)
+    table.cell(t, 1, 13, _dSym + " | " + _4hSym + " | " + _1hSym,
+         text_color=color.white, text_size=size.tiny)
