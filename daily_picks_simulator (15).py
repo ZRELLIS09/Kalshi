@@ -357,6 +357,7 @@ def fetch_odds_api(api_key, date_str=None):
     games = []
 
     for event in data:
+        et_dt = None
         commence = event.get("commence_time", "")
         if not commence:
             continue
@@ -412,7 +413,7 @@ def fetch_odds_api(api_key, date_str=None):
             "away_team": away,
             "spread": home_spread,
             "commence_time": commence,
-            "tip_et": et_dt.strftime("%-I:%M %p ET") if 'et_dt' in dir() else "",
+            "tip_et": et_dt.strftime("%-I:%M %p ET") if et_dt is not None else "",
         })
 
     print(f"  Parsed {len(games)} games for {today}")
@@ -604,11 +605,17 @@ def predict_games(games, model, sigma, snapshot_df, snap_date, calibrator=None,
             z_gap_flag = "WARN_ZGAP"
 
         # Apply isotonic calibration if available
-        if calibrator is not None:
-            try:
-                cover_prob_home = float(calibrator.predict([z_mugap])[0])
-            except Exception:
+        use_calibrated = calibrator is not None
+        if use_calibrated:
+            if np.isnan(z_mugap):
+                use_calibrated = False
                 cover_prob_home = raw_cover
+            else:
+                try:
+                    cover_prob_home = float(calibrator.predict([z_mugap])[0])
+                except Exception:
+                    use_calibrated = False
+                    cover_prob_home = raw_cover
         else:
             cover_prob_home = raw_cover
 
@@ -654,7 +661,7 @@ def predict_games(games, model, sigma, snapshot_df, snap_date, calibrator=None,
         # Z-gap block overrides everything
         if z_gap_flag == "BLOCKED_ZGAP":
             units = 0  # Force no-play: spread data is almost certainly wrong
-        elif calibrator is not None:
+        elif use_calibrated:
             if tier == "POCKET":
                 # Pocket: lower floor, gentler sizing
                 if edge >= 0.05:

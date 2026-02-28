@@ -223,6 +223,11 @@ def main():
     cover_all  = df["home_covered"].values
     dates_all  = pd.to_datetime(df["_gd"].values)
 
+    # Build away-orientation features: flip *_diff columns, keep tempo_avg/hca
+    DIFF_MASK = np.array([c.endswith("_diff") for c in FEATURE_COLS])
+    X_away = X_all.copy()
+    X_away[:, DIFF_MASK] *= -1
+
     # ── [4] Walk-forward: collect OOS (z, outcome) pairs ────────────────────
     print("\n[4] Walk-forward OOS collection...")
 
@@ -230,6 +235,7 @@ def main():
     oos_outcomes = []
     folds_run    = 0
     folds_skipped = 0
+    n_active     = len(FEATURE_COLS)
 
     # First boundary: date of the MIN_TRAIN-th game (earliest viable warmup)
     warmup_cutoff = dates_all[MIN_TRAIN - 1]
@@ -251,12 +257,19 @@ def main():
             folds_skipped += 1
             continue
 
-        # Train Ridge strictly on past data
-        m = Ridge(alpha=RIDGE_ALPHA)
-        m.fit(X_all[tr_mask], y_all[tr_mask])
+        # Per-fold active columns: drop zero-variance features on train split
+        col_std = np.nanstd(X_all[tr_mask], axis=0)
+        active_idx = np.where(col_std > 1e-12)[0]
+        n_active = len(active_idx)
 
-        # Predict on holdout — true OOS
-        mu_te = m.predict(X_all[te_mask])
+        # Train Ridge strictly on past data (active columns only)
+        m = Ridge(alpha=RIDGE_ALPHA)
+        m.fit(X_all[tr_mask][:, active_idx], y_all[tr_mask])
+
+        # Predict on holdout — flip-averaged μ (matches simulator)
+        mu_home_te = m.predict(X_all[te_mask][:, active_idx])
+        mu_away_te = m.predict(X_away[te_mask][:, active_idx])
+        mu_te = (mu_home_te - mu_away_te) / 2
         z_te  = mu_te + spread_all[te_mask]   # μ-gap = mu + spread
 
         oos_z.extend(z_te.tolist())
@@ -269,6 +282,7 @@ def main():
     oos_outcomes = np.array(oos_outcomes)
 
     print(f"  Folds completed:  {folds_run}  (skipped: {folds_skipped})")
+    print(f"  μ-mode: flip-avg  active_cols: {n_active}")
     print(f"  OOS pairs:        {len(oos_z)}")
 
     if len(oos_z) < MIN_OOS_TOTAL:
