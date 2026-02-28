@@ -416,7 +416,7 @@ def fetch_odds_api(api_key, date_str=None):
             "away_team": away,
             "spread": home_spread,
             "commence_time": commence,
-            "tip_et": et_dt.strftime("%-I:%M %p ET") if et_dt is not None else "",
+            "tip_et": et_dt.strftime("%I:%M %p ET").lstrip("0") if et_dt is not None else "",
         })
 
     print(f"  Parsed {len(games)} games for {today}")
