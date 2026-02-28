@@ -67,6 +67,9 @@ WF_MIN_OOS_TOTAL = 200
 WF_FOLD_DAYS     = 21
 BREAKEVEN_110 = 1.1 / 2.1  # 0.523809 — breakeven prob at -110 juice
 
+# ── MAGNITUDE AUDIT FLAG (temporary — set False to suppress) ──
+DEBUG_MAGNITUDE = True
+
 # Known neutral-site showcase events (add as they arise)
 # Format: frozenset of Torvik team names
 # These get auto-flagged as neutral even without --neutral
@@ -592,7 +595,12 @@ def predict_games(games, model, sigma, snapshot_df, snap_date, calibrator=None,
 
         # μ-gap (the calibration input signal)
         z_mugap = mu + spread
-        
+
+        # ── MAGNITUDE DEBUG (per-game) ──
+        if DEBUG_MAGNITUDE:
+            print(f"    [MAG] {away} @ {home}  μ={mu:+.2f}  spread={spread:+.1f}  "
+                  f"z={z_mugap:+.2f}  flip_swing={flip_swing:.2f}")
+
         # ── SECOND SANITY GATE: z-gap magnitude ──
         # In real CBB, |z_mugap| > 15 is almost never a real edge —
         # it's almost always a spread data error. Flag these.
@@ -719,6 +727,18 @@ def predict_games(games, model, sigma, snapshot_df, snap_date, calibrator=None,
             "z_gap_flag": z_gap_flag,
             "commence_time": game.get("commence_time", ""),
         })
+
+    # ── MAGNITUDE AUDIT SUMMARY ──
+    if DEBUG_MAGNITUDE:
+        _valid = [r for r in results if "error" not in r]
+        if _valid:
+            _mus = [abs(r["mu"]) for r in _valid]
+            _zs = [abs(r["z_mugap"]) for r in _valid]
+            print(f"\n  ── MAGNITUDE AUDIT SUMMARY ──")
+            print(f"    max |μ|:       {max(_mus):.2f}")
+            print(f"    max |z|:       {max(_zs):.2f}")
+            print(f"    count |z|>15:  {sum(1 for z in _zs if z > 15)}")
+            print(f"    count |z|>20:  {sum(1 for z in _zs if z > 20)}")
 
     return results
 

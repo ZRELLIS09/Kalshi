@@ -223,6 +223,21 @@ def main():
     cover_all  = df["home_covered"].values
     dates_all  = pd.to_datetime(df["_gd"].values)
 
+    # ── FEATURE SCALE AUDIT (Section 2) ────────────────────────────────────
+    print(f"\n  ── FEATURE SCALE AUDIT ──")
+    for _fc in ["adj_o_diff", "adj_d_diff", "barthag_diff"]:
+        _ci = FEATURE_COLS.index(_fc)
+        _v = X_all[:, _ci]
+        print(f"    {_fc:<18} min={_v.min():+8.3f}  max={_v.max():+8.3f}  "
+              f"std={_v.std():7.3f}  mean={_v.mean():+7.3f}")
+    _sample_snap = list(snapshots.values())[0]
+    if "rating" in _sample_snap.columns:
+        _ratings = _sample_snap["rating"].dropna()
+        print(f"    {'rating (raw)':<18} min={_ratings.min():+8.3f}  max={_ratings.max():+8.3f}  "
+              f"std={_ratings.std():7.3f}  mean={_ratings.mean():+7.3f}")
+    else:
+        print(f"    rating column: NOT PRESENT in snapshots")
+
     # Build away-orientation features: flip *_diff columns, keep tempo_avg/hca
     DIFF_MASK = np.array([c.endswith("_diff") for c in FEATURE_COLS])
     X_away = X_all.copy()
@@ -233,6 +248,8 @@ def main():
 
     oos_z        = []
     oos_outcomes = []
+    oos_mu       = []          # AUDIT: track μ separately for magnitude diagnostics
+    oos_spread_v = []          # AUDIT: track per-game spreads for correlation
     folds_run    = 0
     folds_skipped = 0
     n_active     = len(FEATURE_COLS)
@@ -274,12 +291,16 @@ def main():
 
         oos_z.extend(z_te.tolist())
         oos_outcomes.extend(cover_all[te_mask].tolist())
+        oos_mu.extend(mu_te.tolist())                      # AUDIT
+        oos_spread_v.extend(spread_all[te_mask].tolist())   # AUDIT
 
         folds_run += 1
         current = fold_end
 
     oos_z        = np.array(oos_z)
     oos_outcomes = np.array(oos_outcomes)
+    oos_mu       = np.array(oos_mu)         # AUDIT
+    oos_spread_v = np.array(oos_spread_v)   # AUDIT
 
     print(f"  Folds completed:  {folds_run}  (skipped: {folds_skipped})")
     print(f"  μ-mode: flip-avg  active_cols: {n_active}")
@@ -298,6 +319,35 @@ def main():
     full_model.fit(X_all, y_all)
     insample_sigma = float(np.std(y_all - full_model.predict(X_all)))
     print(f"  σ in-sample (ref): {insample_sigma:.2f}")
+
+    # ── MAGNITUDE AUDIT DIAGNOSTICS ────────────────────────────────────────
+    print(f"\n  ── MAGNITUDE AUDIT (OOS) ──")
+    print(f"  [A] OOS μ distribution (n={len(oos_mu)}):")
+    print(f"      min:  {oos_mu.min():+.2f}")
+    print(f"      max:  {oos_mu.max():+.2f}")
+    print(f"      mean: {oos_mu.mean():+.2f}")
+    print(f"      std:  {oos_mu.std():.2f}")
+    print(f"      p01:  {np.percentile(oos_mu, 1):+.2f}")
+    print(f"      p99:  {np.percentile(oos_mu, 99):+.2f}")
+    _n_extreme = int(np.sum(np.abs(oos_mu) > 25))
+    print(f"      |μ|>25: {_n_extreme} ({_n_extreme/len(oos_mu)*100:.1f}%)")
+    print(f"  [B] OOS spread distribution:")
+    print(f"      min:  {oos_spread_v.min():+.1f}")
+    print(f"      max:  {oos_spread_v.max():+.1f}")
+    print(f"  [C] corr(μ, spread): {np.corrcoef(oos_mu, oos_spread_v)[0, 1]:+.4f}")
+    print(f"  [D] OOS z distribution (n={len(oos_z)}):")
+    print(f"      min:  {oos_z.min():+.2f}")
+    print(f"      max:  {oos_z.max():+.2f}")
+    print(f"      p01:  {np.percentile(oos_z, 1):+.2f}")
+    print(f"      p99:  {np.percentile(oos_z, 99):+.2f}")
+    _n_z15 = int(np.sum(np.abs(oos_z) > 15))
+    _n_z20 = int(np.sum(np.abs(oos_z) > 20))
+    print(f"      |z|>15: {_n_z15} ({_n_z15/len(oos_z)*100:.1f}%)")
+    print(f"      |z|>20: {_n_z20} ({_n_z20/len(oos_z)*100:.1f}%)")
+    print(f"  [E] Intercept cancellation: algebraically verified")
+    print(f"      flip-avg μ = Σ(coef_i · diff_i); intercept, tempo_avg, hca cancel")
+    if folds_run > 0:
+        print(f"      last-fold intercept: {m.intercept_:+.4f}  (cancelled by flip-avg)")
 
     # ── [5] Fit isotonic on OOS z → P(home_cover) ───────────────────────────
     print("\n[5] Fitting isotonic calibrator on OOS pairs...")
