@@ -1,0 +1,19 @@
+// ============================================================================
+// PIVOT TIME → CHART BAR INDEX MAPPING (CRITICAL FIX)
+// ============================================================================
+
+// 5m
+tf5m_barH = not na(tf5m_tH) ? ta.valuewhen(time == tf5m_tH, bar_index, 0) : na
+tf5m_barL = not na(tf5m_tL) ? ta.valuewhen(time == tf5m_tL, bar_index, 0) : na
+
+// 15m
+tf15m_barH = not na(tf15m_tH) ? ta.valuewhen(time == tf15m_tH, bar_index, 0) : na
+tf15m_barL = not na(tf15m_tL) ? ta.valuewhen(time == tf15m_tL, bar_index, 0) : na
+
+// 1h
+tf1h_barH = not na(tf1h_tH) ? ta.valuewhen(time == tf1h_tH, bar_index, 0) : na
+tf1h_barL = not na(tf1h_tL) ? ta.valuewhen(time == tf1h_tL, bar_index, 0) : na
+
+// 4h
+tf4h_barH = not na(tf4h_tH) ? ta.valuewhen(time == tf4h_tH, bar_index, 0) : na
+tf4h_barL = not na(tf4h_tL) ? ta.valuewhen(time == tf4h_tL, bar_index, 0) : na
