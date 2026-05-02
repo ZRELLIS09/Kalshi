@@ -102,11 +102,11 @@ def find_9am_fvgs(df_tf: pd.DataFrame, tf_min: int) -> list[FVG]:
             b1, b3 = ctx.iloc[i - 1], ctx.iloc[i + 1]
             if b1["high"] < b3["low"]:
                 lo, hi = float(b1["high"]), float(b3["low"])
-                fvgs.append(FVG(pd.Timestamp(d), b2_ts, tf_min,
+                fvgs.append(FVG(pd.Timestamp(d, tz=NY_TZ), b2_ts, tf_min,
                                 "bullish", lo, hi, (lo + hi) / 2))
             elif b1["low"] > b3["high"]:
                 lo, hi = float(b3["high"]), float(b1["low"])
-                fvgs.append(FVG(pd.Timestamp(d), b2_ts, tf_min,
+                fvgs.append(FVG(pd.Timestamp(d, tz=NY_TZ), b2_ts, tf_min,
                                 "bearish", lo, hi, (lo + hi) / 2))
     return fvgs
 
@@ -115,42 +115,76 @@ def find_9am_fvgs(df_tf: pd.DataFrame, tf_min: int) -> list[FVG]:
 # Touch detection & reaction
 # ---------------------------------------------------------------------------
 
-def all_touches(df_1m: pd.DataFrame, fvg: FVG, search_end: pd.Timestamp,
-                lookahead_days: int = 30) -> list[pd.Timestamp]:
-    """Find every 1m bar after the FVG forms whose range intersects
-    [fvg.low, fvg.high]. Returns list of touch timestamps in order.
-    Stops at search_end or `lookahead_days` after FVG date.
+def find_touch_events(df_1m: pd.DataFrame, fvg: FVG,
+                      search_end: pd.Timestamp,
+                      lookahead_days: int = 20,
+                      same_day: bool = False) -> list[dict]:
+    """Find distinct touch events (contiguous runs of in-zone bars) AFTER
+    the FVG day. Returns list of dicts with touch_ts (first in-zone bar),
+    exit_ts, and max_penetration (0=just clipped near edge, 1=fully filled
+    to far edge).
+
+    same_day=False (default) skips same-day re-entry to mirror the user's
+    'touched at 9AM on a LATER day' criterion.
     """
-    start = fvg.middle_ts + pd.Timedelta(minutes=fvg.timeframe_min)
-    end = min(search_end,
-              fvg.date + pd.Timedelta(days=lookahead_days + 1))
+    if same_day:
+        start = fvg.middle_ts + pd.Timedelta(minutes=fvg.timeframe_min * 2)
+    else:
+        # next NY calendar day at 00:00
+        start = pd.Timestamp(fvg.date.date(), tz=NY_TZ) + pd.Timedelta(days=1)
+    end = min(search_end, start + pd.Timedelta(days=lookahead_days))
     sl = df_1m.loc[start:end]
     if sl.empty:
         return []
-    mask = (sl["high"] >= fvg.low) & (sl["low"] <= fvg.high)
-    return list(sl.index[mask])
-
-
-def touch_position(fvg: FVG, px: float) -> str:
-    """Where in the FVG was the touch? 'CE' / 'edge_near' / 'edge_far'."""
     rng = fvg.high - fvg.low
     if rng <= 0:
-        return "edge_near"
-    norm = (px - fvg.low) / rng  # 0=low, 1=high
-    if abs(norm - 0.5) <= CE_TOLERANCE_PCT:
-        return "CE"
-    if fvg.direction == "bullish":
-        # near edge for bullish = top of FVG (price coming down hits top first)
-        return "edge_near" if norm > 0.5 else "edge_far"
-    else:
-        return "edge_near" if norm < 0.5 else "edge_far"
+        return []
+    in_zone = ((sl["high"] >= fvg.low) & (sl["low"] <= fvg.high)).to_numpy()
+    if not in_zone.any():
+        return []
+    # Run boundaries: True at first/last bar of each contiguous in-zone run
+    pad_prev = np.concatenate([[False], in_zone[:-1]])
+    pad_next = np.concatenate([in_zone[1:], [False]])
+    enters = in_zone & ~pad_prev
+    exits = in_zone & ~pad_next
+    enter_idx = np.where(enters)[0]
+    exit_idx = np.where(exits)[0]
+    n = min(len(enter_idx), len(exit_idx))
+    events = []
+    for ei, xi in zip(enter_idx[:n], exit_idx[:n]):
+        run = sl.iloc[ei:xi + 1]
+        if fvg.direction == "bullish":
+            extreme = float(run["low"].min())
+            penetration = (fvg.high - extreme) / rng
+        else:
+            extreme = float(run["high"].max())
+            penetration = (extreme - fvg.low) / rng
+        penetration = max(0.0, min(1.0, penetration))
+        events.append({
+            "touch_ts": sl.index[ei],
+            "exit_ts": sl.index[xi],
+            "max_penetration": penetration,
+            "n_bars_in_zone": int(xi - ei + 1),
+        })
+    return events
+
+
+def position_bucket(penetration: float) -> str:
+    if penetration < 0.25:
+        return "edge_near"        # just clipped near edge, no CE reach
+    if penetration < 0.50:
+        return "approached_CE"    # past quartile, didn't reach CE
+    if penetration < 0.75:
+        return "through_CE"       # past CE, didn't fill
+    return "filled"               # past 3/4, near full fill
 
 
 def measure_reaction(df_1m: pd.DataFrame, fvg: FVG, touch_ts: pd.Timestamp,
                      react_min: int = REACTION_MIN,
                      react_pts: float = REACTION_PTS) -> dict:
-    """After touch, measure whether price moves in the expected direction
-    by react_pts within react_min minutes."""
+    """Measure REACTION_MIN-minute reaction in the FVG's expected direction
+    starting from the touch bar. Reversal = move >= react_pts in expected dir.
+    Reference price = close of the bar that first entered the zone."""
     react_end = touch_ts + pd.Timedelta(minutes=react_min)
     react = df_1m.loc[touch_ts:react_end]
     if react.empty:
@@ -171,14 +205,16 @@ def measure_reaction(df_1m: pd.DataFrame, fvg: FVG, touch_ts: pd.Timestamp,
 def build_touch_table(df_1m: pd.DataFrame, fvgs: list[FVG],
                       search_end: pd.Timestamp,
                       max_touches_per_fvg: int = 6) -> pd.DataFrame:
-    """For each FVG, record up to max_touches_per_fvg touches with
-    touch_ordinal (1=first), reaction metrics, and position bucket."""
+    """For each FVG, record up to max_touches_per_fvg distinct touch events
+    on days AFTER the FVG forms, with reaction metrics."""
     rows = []
     for fvg in fvgs:
-        touches = all_touches(df_1m, fvg, search_end)
-        for ord_, ts in enumerate(touches[:max_touches_per_fvg], start=1):
+        events = find_touch_events(df_1m, fvg, search_end,
+                                   lookahead_days=20, same_day=False)
+        for ord_, ev in enumerate(events[:max_touches_per_fvg], start=1):
+            ts = ev["touch_ts"]
             px = float(df_1m.loc[ts, "close"])
-            pos = touch_position(fvg, px)
+            pos = position_bucket(ev["max_penetration"])
             r = measure_reaction(df_1m, fvg, ts)
             rows.append({
                 "fvg_date": fvg.date.date(),
@@ -192,6 +228,7 @@ def build_touch_table(df_1m: pd.DataFrame, fvgs: list[FVG],
                 "touch_hour": ts.hour,
                 "days_since_fvg": (ts.date() - fvg.date.date()).days,
                 "touch_px": px,
+                "max_penetration": ev["max_penetration"],
                 "touch_position": pos,
                 "reversed": r["reversed"],
                 "react_mfe": r["mfe"],
