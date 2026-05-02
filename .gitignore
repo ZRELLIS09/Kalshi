@@ -1,0 +1,6 @@
+artifacts/
+mnq_1m_clean.csv
+nq_1h_export.csv
+nq_5m_export.csv
+__pycache__/
+*.pyc
