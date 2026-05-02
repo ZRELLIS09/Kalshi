@@ -1,0 +1,12 @@
+metric,value
+n_qualifying_fvgs,792.0
+n_with_extension_and_retrace,717.0
+n_HELD_AT_FVG,48.0
+held_rate,0.06694560669456066
+z_held_vs_50,-23.191669980520068
+p_held_vs_50,0.0
+count_BROKE_FVG_HELD_9AM,420.0
+count_HIT_9AM,178.0
+count_NO_RETRACE,75.0
+count_PIERCED_9AM,71.0
+count_HELD_AT_FVG,48.0
