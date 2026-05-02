@@ -545,6 +545,170 @@ def unexpected_patterns(daily: pd.DataFrame, alignment_detail_df: pd.DataFrame) 
     return out
 
 
+def _two_prop_z(p1, n1, p2, n2):
+    """Two-proportion z test. Returns (z, two-sided p)."""
+    if n1 == 0 or n2 == 0:
+        return float("nan"), float("nan")
+    p = (p1 * n1 + p2 * n2) / (n1 + n2)
+    se = (p * (1 - p) * (1 / n1 + 1 / n2)) ** 0.5
+    if se == 0:
+        return float("nan"), float("nan")
+    z = (p1 - p2) / se
+    # normal CDF approximation
+    from math import erf, sqrt
+    p_two = 2 * (1 - 0.5 * (1 + erf(abs(z) / sqrt(2))))
+    return float(z), float(p_two)
+
+
+def _welch_t(x, y):
+    """Welch's two-sample t. Returns (t, df, two-sided p via normal approx)."""
+    x = np.asarray(x, dtype=float); y = np.asarray(y, dtype=float)
+    x = x[~np.isnan(x)]; y = y[~np.isnan(y)]
+    if len(x) < 2 or len(y) < 2:
+        return float("nan"), float("nan"), float("nan")
+    mx, my = x.mean(), y.mean()
+    vx, vy = x.var(ddof=1), y.var(ddof=1)
+    nx, ny = len(x), len(y)
+    se = (vx / nx + vy / ny) ** 0.5
+    if se == 0:
+        return float("nan"), float("nan"), float("nan")
+    t = (mx - my) / se
+    df = (vx / nx + vy / ny) ** 2 / (
+        (vx ** 2) / (nx ** 2 * (nx - 1)) + (vy ** 2) / (ny ** 2 * (ny - 1)))
+    # normal approx (good when df > 30)
+    from math import erf, sqrt
+    p_two = 2 * (1 - 0.5 * (1 + erf(abs(t) / sqrt(2))))
+    return float(t), float(df), float(p_two)
+
+
+def significance_tests(daily: pd.DataFrame, alignment_flag: pd.Series,
+                       scenario_merged: pd.DataFrame) -> pd.DataFrame:
+    """Run aligned-vs-not and scenario-pair significance tests."""
+    rows = []
+    a = daily[alignment_flag]
+    na = daily[~alignment_flag]
+    # Continuation rate (proportion test)
+    pa = (a["continuation"] == "continuation").mean() if len(a) else float("nan")
+    pna = (na["continuation"] == "continuation").mean() if len(na) else float("nan")
+    z, p = _two_prop_z(pa, len(a), pna, len(na))
+    rows.append({"test": "aligned_vs_nonaligned_continuation_rate",
+                 "p1": pa, "n1": len(a), "p2": pna, "n2": len(na),
+                 "stat": z, "p_value": p})
+    # Mean |move| (Welch t)
+    t, df, p = _welch_t(a["close_10_13"].abs(), na["close_10_13"].abs())
+    rows.append({"test": "aligned_vs_nonaligned_abs_move",
+                 "p1": float(a["close_10_13"].abs().mean()) if len(a) else float("nan"),
+                 "n1": len(a),
+                 "p2": float(na["close_10_13"].abs().mean()) if len(na) else float("nan"),
+                 "n2": len(na), "stat": t, "p_value": p})
+    # Pairwise scenario continuation
+    if scenario_merged is not None and "scenario" in scenario_merged.columns:
+        for s1, s2 in [("both", "none"), ("both", "only_1h"),
+                       ("only_1h", "none"), ("only_5m", "none")]:
+            g1 = scenario_merged[scenario_merged["scenario"] == s1]
+            g2 = scenario_merged[scenario_merged["scenario"] == s2]
+            p1 = (g1["continuation"] == "continuation").mean() if len(g1) else float("nan")
+            p2 = (g2["continuation"] == "continuation").mean() if len(g2) else float("nan")
+            z, pv = _two_prop_z(p1, len(g1), p2, len(g2))
+            rows.append({"test": f"scenario_{s1}_vs_{s2}_continuation",
+                         "p1": p1, "n1": len(g1), "p2": p2, "n2": len(g2),
+                         "stat": z, "p_value": pv})
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# Prior-day 9AM zone interaction
+# ---------------------------------------------------------------------------
+
+def prior_9am_zone_touches(df_1m: pd.DataFrame, daily: pd.DataFrame,
+                           lookback: int = 5,
+                           tolerance_pts: float = 5.0) -> pd.DataFrame:
+    """For each day, scan post-10:00 bars for touches of prior-day 9AM 1H
+    wicks/body. Record first-touch timestamp and 60-min reaction.
+
+    A touch is when 1m bar high>=level-tol and low<=level+tol (i.e. bar
+    intersects a tolerance window around the level). Levels tested:
+      - prior 9AM L0 (low wick), L25, L50 (CE), L75, L100 (high wick)
+      - prior 9:45 L0..L100 (precision layer, optional alongside)
+
+    Reaction: if level is L0/L25 (lower body) -> reversal = move UP 60min later
+              if level is L75/L100 (upper body) -> reversal = move DOWN
+              if L50 -> reversal = move AWAY from touch direction
+    """
+    rows = []
+    days = list(daily.index)
+    for i, today in enumerate(days):
+        if i == 0:
+            continue
+        ten = pd.Timestamp(today.date(), tz=NY_TZ).replace(hour=10, minute=0)
+        end = ten.replace(hour=16, minute=0)
+        post = df_1m.loc[ten:end - pd.Timedelta(seconds=1)]
+        if post.empty:
+            continue
+        for prior in days[max(0, i - lookback):i]:
+            for src in ("1h", "5m"):
+                for ln in LEVEL_NAMES:
+                    lvl = float(daily.loc[prior, f"{src}_{ln}"])
+                    hits = post[(post["high"] >= lvl - tolerance_pts) &
+                                (post["low"] <= lvl + tolerance_pts)]
+                    if hits.empty:
+                        continue
+                    first_ts = hits.index[0]
+                    # 60-min reaction
+                    react_end = first_ts + pd.Timedelta(minutes=60)
+                    react = post.loc[first_ts:react_end]
+                    if react.empty:
+                        continue
+                    px_at_touch = float(post.loc[first_ts, "close"])
+                    react_close = float(react["close"].iloc[-1])
+                    react_high = float(react["high"].max())
+                    react_low = float(react["low"].min())
+                    direction_expected = -1 if ln in ("L75", "L100") else (
+                        1 if ln in ("L0", "L25") else 0)  # away-from for L50
+                    if direction_expected == 0:
+                        # for L50, "reversal" = price ends >0.5 range away
+                        reversed_ = abs(react_close - px_at_touch) > tolerance_pts
+                    else:
+                        reversed_ = (react_close - px_at_touch) * direction_expected > tolerance_pts
+                    rows.append({
+                        "today": today.date(), "prior": prior.date(),
+                        "src": src, "level": ln, "level_price": lvl,
+                        "first_touch_ts": first_ts,
+                        "first_touch_hour": first_ts.hour,
+                        "px_at_touch": px_at_touch,
+                        "react_close_60m": react_close,
+                        "react_mfe": react_high - px_at_touch,
+                        "react_mae": react_low - px_at_touch,
+                        "reversed": bool(reversed_),
+                    })
+    return pd.DataFrame(rows)
+
+
+def hour_of_touch_summary(touches: pd.DataFrame) -> pd.DataFrame:
+    """Reversal rate by hour-of-first-touch, split by source (1h vs 5m) and
+    by level. Tests whether 13:00 touches reverse stronger (your prior 90%
+    finding on 9AM FVGs)."""
+    if touches.empty:
+        return pd.DataFrame()
+    out = touches.groupby(["src", "first_touch_hour"]).agg(
+        n=("reversed", "size"),
+        reversal_rate=("reversed", "mean"),
+        avg_react_mfe=("react_mfe", "mean"),
+        avg_react_mae=("react_mae", "mean"),
+    ).reset_index()
+    return out.sort_values(["src", "first_touch_hour"])
+
+
+def hour_x_level_summary(touches: pd.DataFrame) -> pd.DataFrame:
+    if touches.empty:
+        return pd.DataFrame()
+    out = touches.groupby(["src", "level", "first_touch_hour"]).agg(
+        n=("reversed", "size"),
+        reversal_rate=("reversed", "mean"),
+    ).reset_index()
+    return out
+
+
 def spot_check_dates(daily: pd.DataFrame, alignment_flag: pd.Series, n: int = 5) -> pd.DataFrame:
     a = daily[alignment_flag].copy()
     na = daily[~alignment_flag].copy()
@@ -748,6 +912,35 @@ def main() -> int:
             v.to_csv(outdir / f"extra_{k}.csv", index=False)
             print(f"\n=== EXTRA: {k} ===")
             print(v.to_string(index=False))
+
+    # ---- Significance tests ----
+    sig = significance_tests(daily, flag, daily_with_scenario)
+    sig.to_csv(outdir / "significance_tests.csv", index=False)
+    print("\n=== SIGNIFICANCE tests ===")
+    print(sig.to_string(index=False))
+
+    # ---- Prior 9AM zone interaction & 13:00 touch test ----
+    print("\n[touch] computing prior-zone touches (this can take a moment)...")
+    touches = prior_9am_zone_touches(df_1m, daily, args.lookback, args.tolerance_pts)
+    touches.to_csv(outdir / "prior_zone_touches.csv", index=False)
+    print(f"[touch] recorded {len(touches):,} first-touch events")
+
+    hour_summary = hour_of_touch_summary(touches)
+    hour_summary.to_csv(outdir / "touch_by_hour.csv", index=False)
+    print("\n=== TOUCH reaction by hour-of-first-touch ===")
+    print(hour_summary.to_string(index=False))
+
+    hl_summary = hour_x_level_summary(touches)
+    hl_summary.to_csv(outdir / "touch_by_hour_x_level.csv", index=False)
+
+    # 13:00 specific: prior-day 9AM 1H levels touched at 12:55-13:05
+    if not touches.empty:
+        t13 = touches[(touches["src"] == "1h") & (touches["first_touch_hour"] == 13)]
+        print(f"\n=== 13:00 touches on prior 9AM 1H levels: n={len(t13)} ===")
+        if len(t13):
+            print(f"  reversal rate = {t13['reversed'].mean()*100:.1f}%")
+            print(f"  avg react MFE = {t13['react_mfe'].mean():.1f}")
+            print(f"  avg react MAE = {t13['react_mae'].mean():.1f}")
 
     # ---- Charts ----
     make_charts(daily, flag, tol_df, lvl, detail, outdir)
