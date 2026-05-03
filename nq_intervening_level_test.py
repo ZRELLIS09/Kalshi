@@ -92,12 +92,17 @@ def find_hour_fvgs(df_tf: pd.DataFrame, tf_min: int,
 def classify_intervention(df_1m: pd.DataFrame, fvg: FVG,
                           nine_low: float, nine_high: float,
                           bias: int,
-                          end_hour: int = 16) -> dict:
+                          end_hour: int = 16,
+                          bounce_pts: float = 30.0,
+                          react_min: int = 60) -> dict:
     """Run the geometry test for one qualifying FVG on its session day.
     bias: +1 bullish 9AM, -1 bearish 9AM.
-    Returns dict with outcome bucket and reaction metrics.
+    Returns dict with outcome bucket, FVG-touch reaction, and 9AM-touch
+    reaction (when 9AM zone was reached).
+
+    A "bounce" is reaction MFE >= bounce_pts in the bias direction within
+    react_min minutes after the touch.
     """
-    # FVG must complete first (third candle of pattern)
     start = fvg.middle_ts + pd.Timedelta(minutes=fvg.timeframe_min * 2)
     end = pd.Timestamp(fvg.date.date(), tz=NY_TZ).replace(hour=end_hour, minute=0)
     if start >= end:
@@ -106,28 +111,47 @@ def classify_intervention(df_1m: pd.DataFrame, fvg: FVG,
     if sl.empty:
         return {"outcome": "NO_DATA"}
 
-    if bias > 0:  # bullish 9AM, FVG is ABOVE 9AM zone, look for retrace down
-        # Did price extend above FVG.high?
+    if bias > 0:  # bullish: FVG above 9AM, look for retrace down
         ext_mask = sl["high"] >= fvg.high
         if not ext_mask.any():
             return {"outcome": "NO_EXTENSION"}
         ext_ts = sl.index[ext_mask][0]
         after = sl.loc[ext_ts:]
         peak_high = float(after["high"].max())
-        # First retrace into FVG
         in_fvg = (after["low"] <= fvg.high) & (after["high"] >= fvg.low)
         if not in_fvg.any():
             return {"outcome": "NO_RETRACE", "peak": peak_high}
         ret_ts = after.index[in_fvg][0]
         post_ret = after.loc[ret_ts:]
         post_low = float(post_ret["low"].min())
-        # Reaction: 60min MFE up from ret_ts close
-        ref_px = float(df_1m.loc[ret_ts, "close"])
-        react_end = ret_ts + pd.Timedelta(minutes=60)
+        ref_px_fvg = float(df_1m.loc[ret_ts, "close"])
+        react_end = ret_ts + pd.Timedelta(minutes=react_min)
         react = df_1m.loc[ret_ts:react_end]
-        react_mfe_up = float(react["high"].max() - ref_px) if len(react) else float("nan")
-        react_mae_dn = float(ref_px - react["low"].min()) if len(react) else float("nan")
-        # Outcome: how far did the retrace go?
+        fvg_react_mfe_up = float(react["high"].max() - ref_px_fvg) if len(react) else float("nan")
+        fvg_react_mae_dn = float(ref_px_fvg - react["low"].min()) if len(react) else float("nan")
+
+        # 9AM zone interaction (only meaningful if price entered nine_low..nine_high)
+        nine_touch_mask = (post_ret["low"] <= nine_high) & (post_ret["high"] >= nine_low)
+        nine_touched = bool(nine_touch_mask.any())
+        nine_react_mfe_up = float("nan")
+        nine_react_mae_dn = float("nan")
+        nine_touch_ts = pd.NaT
+        nine_penetration = float("nan")
+        nine_bounced = False
+        if nine_touched:
+            nine_touch_ts = post_ret.index[nine_touch_mask][0]
+            ref_px_9am = float(df_1m.loc[nine_touch_ts, "close"])
+            r9 = df_1m.loc[nine_touch_ts:nine_touch_ts + pd.Timedelta(minutes=react_min)]
+            if len(r9):
+                nine_react_mfe_up = float(r9["high"].max() - ref_px_9am)
+                nine_react_mae_dn = float(ref_px_9am - r9["low"].min())
+                nine_bounced = nine_react_mfe_up >= bounce_pts
+            # how deep into 9AM zone? 0 = just clipped top (nine_high), 1 = at nine_low
+            min_after_9am = float(post_ret.loc[nine_touch_ts:]["low"].min())
+            rng9 = nine_high - nine_low
+            nine_penetration = (nine_high - min_after_9am) / rng9 if rng9 > 0 else float("nan")
+            nine_penetration = max(0.0, min(1.5, nine_penetration))  # >1 = pierced
+
         if post_low > fvg.low:
             oc = "HELD_AT_FVG"
         elif post_low > nine_high:
@@ -136,12 +160,21 @@ def classify_intervention(df_1m: pd.DataFrame, fvg: FVG,
             oc = "HIT_9AM"
         else:
             oc = "PIERCED_9AM"
+
         return {"outcome": oc,
                 "peak": peak_high, "min_after_ret": post_low,
-                "react_mfe_up": react_mfe_up,
-                "react_mae_dn": react_mae_dn,
-                "ret_ts": ret_ts}
-    else:  # bearish 9AM, FVG is BELOW 9AM zone, look for retrace up
+                "fvg_react_mfe": fvg_react_mfe_up,
+                "fvg_react_mae": fvg_react_mae_dn,
+                "fvg_bounced": fvg_react_mfe_up >= bounce_pts if not np.isnan(fvg_react_mfe_up) else False,
+                "ret_ts": ret_ts,
+                "nine_touched": nine_touched,
+                "nine_touch_ts": nine_touch_ts,
+                "nine_react_mfe": nine_react_mfe_up,
+                "nine_react_mae": nine_react_mae_dn,
+                "nine_penetration": nine_penetration,
+                "nine_bounced": bool(nine_bounced),
+                }
+    else:  # bearish: FVG below 9AM, retrace up
         ext_mask = sl["low"] <= fvg.low
         if not ext_mask.any():
             return {"outcome": "NO_EXTENSION"}
@@ -154,11 +187,31 @@ def classify_intervention(df_1m: pd.DataFrame, fvg: FVG,
         ret_ts = after.index[in_fvg][0]
         post_ret = after.loc[ret_ts:]
         post_high = float(post_ret["high"].max())
-        ref_px = float(df_1m.loc[ret_ts, "close"])
-        react_end = ret_ts + pd.Timedelta(minutes=60)
-        react = df_1m.loc[ret_ts:react_end]
-        react_mfe_dn = float(ref_px - react["low"].min()) if len(react) else float("nan")
-        react_mae_up = float(react["high"].max() - ref_px) if len(react) else float("nan")
+        ref_px_fvg = float(df_1m.loc[ret_ts, "close"])
+        react = df_1m.loc[ret_ts:ret_ts + pd.Timedelta(minutes=react_min)]
+        fvg_react_mfe_dn = float(ref_px_fvg - react["low"].min()) if len(react) else float("nan")
+        fvg_react_mae_up = float(react["high"].max() - ref_px_fvg) if len(react) else float("nan")
+
+        nine_touch_mask = (post_ret["low"] <= nine_high) & (post_ret["high"] >= nine_low)
+        nine_touched = bool(nine_touch_mask.any())
+        nine_react_mfe_dn = float("nan")
+        nine_react_mae_up = float("nan")
+        nine_touch_ts = pd.NaT
+        nine_penetration = float("nan")
+        nine_bounced = False
+        if nine_touched:
+            nine_touch_ts = post_ret.index[nine_touch_mask][0]
+            ref_px_9am = float(df_1m.loc[nine_touch_ts, "close"])
+            r9 = df_1m.loc[nine_touch_ts:nine_touch_ts + pd.Timedelta(minutes=react_min)]
+            if len(r9):
+                nine_react_mfe_dn = float(ref_px_9am - r9["low"].min())
+                nine_react_mae_up = float(r9["high"].max() - ref_px_9am)
+                nine_bounced = nine_react_mfe_dn >= bounce_pts
+            max_after_9am = float(post_ret.loc[nine_touch_ts:]["high"].max())
+            rng9 = nine_high - nine_low
+            nine_penetration = (max_after_9am - nine_low) / rng9 if rng9 > 0 else float("nan")
+            nine_penetration = max(0.0, min(1.5, nine_penetration))
+
         if post_high < fvg.high:
             oc = "HELD_AT_FVG"
         elif post_high < nine_low:
@@ -167,11 +220,20 @@ def classify_intervention(df_1m: pd.DataFrame, fvg: FVG,
             oc = "HIT_9AM"
         else:
             oc = "PIERCED_9AM"
+
         return {"outcome": oc,
                 "trough": trough_low, "max_after_ret": post_high,
-                "react_mfe_dn": react_mfe_dn,
-                "react_mae_up": react_mae_up,
-                "ret_ts": ret_ts}
+                "fvg_react_mfe": fvg_react_mfe_dn,
+                "fvg_react_mae": fvg_react_mae_up,
+                "fvg_bounced": fvg_react_mfe_dn >= bounce_pts if not np.isnan(fvg_react_mfe_dn) else False,
+                "ret_ts": ret_ts,
+                "nine_touched": nine_touched,
+                "nine_touch_ts": nine_touch_ts,
+                "nine_react_mfe": nine_react_mfe_dn,
+                "nine_react_mae": nine_react_mae_up,
+                "nine_penetration": nine_penetration,
+                "nine_bounced": bool(nine_bounced),
+                }
 
 
 def qualifies(fvg: FVG, daily_row: pd.Series) -> bool:
@@ -434,6 +496,82 @@ def main() -> int:
             print(f"  with qualifying 10AM FVG: P(reach 9AM zone) = {with_hit*100:.1f}% (n={len(tested)})")
             print(f"  without qualifying FVG:   P(reach 9AM zone) = {base_hit*100:.1f}% (n={baseline['n']})")
             print(f"  diff (FVG protects 9AM by): {(base_hit - with_hit)*100:.1f}pp")
+            print(f"  z = {z:+.2f}, p = {p:.4f}")
+
+    # ---- NEW: when FVG didn't hold, did the 9AM range bounce price? ----
+    print("\n=== 9AM-zone bounce when FVG did NOT hold ===")
+    if not df10.empty:
+        broke = df10[df10["outcome"].isin(["BROKE_FVG_HELD_9AM", "HIT_9AM",
+                                           "PIERCED_9AM"])]
+        n_broke = len(broke)
+        n_no9am = (broke["outcome"] == "BROKE_FVG_HELD_9AM").sum()
+        n_hit = (broke["outcome"] == "HIT_9AM").sum()
+        n_pierce = (broke["outcome"] == "PIERCED_9AM").sum()
+        print(f"  total 'FVG broken' instances: {n_broke}")
+        print(f"    reversed BETWEEN FVG and 9AM (didn't reach 9AM): "
+              f"{n_no9am} ({n_no9am/n_broke*100:.1f}%)")
+        print(f"    reached 9AM zone, didn't pierce (HIT_9AM):       "
+              f"{n_hit} ({n_hit/n_broke*100:.1f}%)")
+        print(f"    pierced 9AM zone:                                "
+              f"{n_pierce} ({n_pierce/n_broke*100:.1f}%)")
+
+        # 9AM bounce quality: of cases that reached 9AM zone, did they
+        # bounce >= 30 pts in bias direction within 60 min?
+        reached_9am = df10[df10["nine_touched"] == True]
+        if len(reached_9am):
+            bounce_rate = float(reached_9am["nine_bounced"].mean())
+            avg_mfe = float(reached_9am["nine_react_mfe"].mean())
+            avg_mae = float(reached_9am["nine_react_mae"].mean())
+            print(f"\n  Of {len(reached_9am)} cases that ENTERED 9AM zone:")
+            print(f"    P(bounce >= 30pts in bias dir, 60min) = {bounce_rate*100:.1f}%")
+            print(f"    avg 9AM-touch reaction MFE = {avg_mfe:.1f} pts")
+            print(f"    avg 9AM-touch reaction MAE = {avg_mae:.1f} pts")
+
+            # Split by penetration depth
+            reached_9am_c = reached_9am.copy()
+            reached_9am_c["pen_bucket"] = pd.cut(
+                reached_9am_c["nine_penetration"],
+                bins=[-0.01, 0.25, 0.5, 0.75, 1.0, 2.0],
+                labels=["just_clipped", "to_25", "to_50_CE",
+                        "to_75", "pierced"])
+            pen_summary = reached_9am_c.groupby("pen_bucket", observed=True).agg(
+                n=("nine_bounced", "size"),
+                bounce_rate=("nine_bounced", "mean"),
+                avg_mfe=("nine_react_mfe", "mean"),
+                avg_mae=("nine_react_mae", "mean"),
+            ).reset_index()
+            print(f"\n  9AM bounce rate by penetration depth into 9AM zone:")
+            print(pen_summary.to_string(index=False))
+            pen_summary.to_csv(outdir / "9am_bounce_by_penetration.csv", index=False)
+
+            # Split by FVG outcome (HIT_9AM vs PIERCED_9AM)
+            by_oc = reached_9am.groupby("outcome").agg(
+                n=("nine_bounced", "size"),
+                bounce_rate=("nine_bounced", "mean"),
+                avg_mfe=("nine_react_mfe", "mean"),
+                avg_mae=("nine_react_mae", "mean"),
+            ).reset_index()
+            print(f"\n  9AM bounce rate by FVG outcome:")
+            print(by_oc.to_string(index=False))
+            by_oc.to_csv(outdir / "9am_bounce_by_outcome.csv", index=False)
+
+            # Split by bias
+            by_bias_9am = reached_9am.groupby("bias").agg(
+                n=("nine_bounced", "size"),
+                bounce_rate=("nine_bounced", "mean"),
+                avg_mfe=("nine_react_mfe", "mean"),
+            ).reset_index()
+            print(f"\n  9AM bounce rate by bias direction:")
+            print(by_bias_9am.to_string(index=False))
+            by_bias_9am.to_csv(outdir / "9am_bounce_by_bias.csv", index=False)
+
+            # Compare: P(bounce|9AM) vs P(bounce|FVG when FVG was tested)
+            tested = df10[df10["fvg_bounced"].notna()]
+            fvg_bounce_rate = float(tested["fvg_bounced"].mean()) if len(tested) else float("nan")
+            z, p = _two_prop_z(bounce_rate, len(reached_9am),
+                                fvg_bounce_rate, len(tested))
+            print(f"\n  P(bounce 30+pts) at 9AM zone:  {bounce_rate*100:.1f}% (n={len(reached_9am)})")
+            print(f"  P(bounce 30+pts) at FVG entry: {fvg_bounce_rate*100:.1f}% (n={len(tested)})")
             print(f"  z = {z:+.2f}, p = {p:.4f}")
 
     # ---- ALSO: any-prior-day same-dir 9AM FVG above current 9AM ----
