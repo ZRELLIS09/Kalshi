@@ -883,6 +883,167 @@ def interpret(summary: pd.DataFrame, sweep: pd.DataFrame,
 
 
 # ---------------------------------------------------------------------------
+# --tomorrow: forward-looking watch-level generator
+# ---------------------------------------------------------------------------
+
+def _next_session_date(last: pd.Timestamp) -> pd.Timestamp:
+    """Skip weekends — return next NY business day after `last`."""
+    nxt = last + pd.Timedelta(days=1)
+    while nxt.weekday() >= 5:
+        nxt += pd.Timedelta(days=1)
+    return nxt.normalize()
+
+
+def tomorrow_watch_levels(days: Dict[pd.Timestamp, DayLevels],
+                          n_prior: int = 5,
+                          cluster_tol: float = 5.0) -> pd.DataFrame:
+    """
+    Build a forward watch list for the next session by clustering prior days'
+    9:45 SD levels. No 9AM 1H levels yet (tomorrow's candle hasn't formed) —
+    the user marks these on chart, then re-runs analysis after 10 AM with
+    chart_analyzer.py.
+
+    Returns a DataFrame ranked by:
+      • cluster size (more prior 9:45 levels stacking = stronger)
+      • proximity to the most recent close
+    """
+    sorted_dates = sorted(days.keys())
+    if not sorted_dates:
+        return pd.DataFrame()
+
+    priors = sorted_dates[-n_prior:]
+    last = sorted_dates[-1]
+    target_date = _next_session_date(last)
+
+    # collect every 9:45 SD level from the prior window
+    candidates: List[Tuple[float, str]] = []
+    for d in priors:
+        dl = days[d]
+        for m, p in dl.m5_levels.items():
+            candidates.append((p, f"{d.date()}_m{m:+.2f}"))
+        # also include the 9:45 wicks themselves (top finding)
+        candidates.append((dl.m5_high, f"{d.date()}_9:45_high"))
+        candidates.append((dl.m5_low,  f"{d.date()}_9:45_low"))
+
+    # greedy cluster — sort by price, merge anything within cluster_tol
+    candidates.sort(key=lambda x: x[0])
+    clusters: List[Dict] = []
+    cur_prices: List[float] = []
+    cur_sources: List[str] = []
+    for price, src in candidates:
+        if cur_prices and abs(price - cur_prices[0]) <= cluster_tol:
+            cur_prices.append(price)
+            cur_sources.append(src)
+        else:
+            if cur_prices:
+                clusters.append({
+                    "center_price": float(np.median(cur_prices)),
+                    "cluster_size": len(cur_prices),
+                    "spread_pts": max(cur_prices) - min(cur_prices),
+                    "sources": "|".join(cur_sources),
+                    "n_unique_days": len({s.split("_")[0] for s in cur_sources}),
+                    "is_wick": any("9:45_" in s for s in cur_sources),
+                })
+            cur_prices = [price]
+            cur_sources = [src]
+    if cur_prices:
+        clusters.append({
+            "center_price": float(np.median(cur_prices)),
+            "cluster_size": len(cur_prices),
+            "spread_pts": max(cur_prices) - min(cur_prices),
+            "sources": "|".join(cur_sources),
+            "n_unique_days": len({s.split("_")[0] for s in cur_sources}),
+            "is_wick": any("9:45_" in s for s in cur_sources),
+        })
+
+    df = pd.DataFrame(clusters)
+    if df.empty:
+        return df
+
+    # rank: prefer multi-day clusters with ≥3 stacked levels and a wick included
+    df["score"] = (df["cluster_size"]
+                   + 2 * df["n_unique_days"]
+                   + 3 * df["is_wick"].astype(int))
+    df = df.sort_values("score", ascending=False).reset_index(drop=True)
+    df.insert(0, "target_date", target_date.date())
+    return df
+
+
+def print_tomorrow(days: Dict[pd.Timestamp, DayLevels], n_prior: int = 5):
+    """Console summary of the watch-list."""
+    df = tomorrow_watch_levels(days, n_prior=n_prior)
+    if df.empty:
+        print("[tomorrow] no clusters generated — insufficient prior data.")
+        return
+
+    target_date = df.iloc[0]["target_date"]
+    sorted_dates = sorted(days.keys())
+    last_dl = days[sorted_dates[-1]]
+    print("\n" + "=" * 72)
+    print(f"TOMORROW WATCH LEVELS — target session: {target_date}")
+    print(f"derived from prior {n_prior} sessions' 9:45 5m SD levels + wicks")
+    print("=" * 72)
+
+    print(f"\nlast session ({sorted_dates[-1].date()}):  "
+          f"9AM 1H {last_dl.h1_low:.2f}–{last_dl.h1_high:.2f}  "
+          f"(bias {last_dl.bias})  |  "
+          f"9:45 5m {last_dl.m5_low:.2f}–{last_dl.m5_high:.2f}  "
+          f"(body {_bias_for(last_dl.m5_open, last_dl.m5_close)})")
+
+    # last few session biases — chain direction
+    chain = [(d.date(), days[d].bias) for d in sorted_dates[-n_prior:]]
+    print(f"\nrecent bias chain: " + ", ".join(f"{d}={b}" for d, b in chain))
+
+    print(f"\n{'#':>2}  {'price':>10}  {'size':>4}  {'days':>4}  "
+          f"{'spread':>6}  wick?  sources")
+    print("-" * 72)
+    for i, r in df.head(15).iterrows():
+        wick = "YES" if r["is_wick"] else "no"
+        # truncate sources for display
+        src = r["sources"]
+        if len(src) > 28:
+            src = src[:25] + "..."
+        print(f"{i+1:>2}  {r['center_price']:>10.2f}  "
+              f"{int(r['cluster_size']):>4}  {int(r['n_unique_days']):>4}  "
+              f"{r['spread_pts']:>6.2f}  {wick:>4}   {src}")
+
+    # no-trade conditions for tomorrow
+    print(f"\n-- NO-TRADE flags for {target_date} --")
+    flags = []
+    h1_ranges = [days[d].h1_range for d in sorted_dates[-20:]]
+    h1_p25 = float(np.quantile(h1_ranges, 0.25))
+    flags.append(f"  • If tomorrow's 9AM 1H range < {h1_p25:.1f} pt "
+                 f"(bottom quartile of last 20 days) → likely chop")
+    if df["cluster_size"].max() <= 2:
+        flags.append("  • Top cluster size ≤ 2 — weak prior-day stacking, "
+                     "alignment edge is minimal")
+    bias_counts = pd.Series([b for _, b in chain]).value_counts()
+    if bias_counts.max() / len(chain) >= 0.8:
+        flags.append(f"  • {bias_counts.idxmax()} bias dominant "
+                     f"({bias_counts.max()}/{len(chain)}) — watch for mean-reversion / exhaustion")
+    if not flags:
+        print("  (none triggered)")
+    for f in flags: print(f)
+
+    # findings reminder for the next session
+    print("\n-- proven findings to apply at 9:45 tomorrow --")
+    print("  • 9:45 wick first-touch reverses 84-96%")
+    print("  • 9:45 HIGH from above reverses 96.4%")
+    print("  • 9:45 body is CONTRARIAN (manipulation candle)")
+    print("  • 9AM bias wins 59.8% when it disagrees with 9:45")
+    print("  • Median expansion 54 min after 09:50 → key window 09:50-10:44")
+    print("  • 13:00 touches on 9AM zones reverse 90%")
+
+    out_path = ARTIFACTS / "tomorrow_watch_levels.csv"
+    df.to_csv(out_path, index=False)
+    print(f"\n[tomorrow] saved → {out_path}")
+
+
+def _bias_for(o: float, c: float) -> str:
+    return "bull" if c > o else ("bear" if c < o else "flat")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -893,6 +1054,10 @@ def main(argv=None):
     ap.add_argument("--pull", action="store_true",
                     help="force fresh Databento pull (needs DATABENTO_API_KEY)")
     ap.add_argument("--lookback", type=int, default=DEFAULT_LOOKBACK)
+    ap.add_argument("--tomorrow", action="store_true",
+                    help="print watch levels for the next session and exit")
+    ap.add_argument("--tomorrow-priors", type=int, default=5,
+                    help="number of prior sessions to cluster from (default 5)")
     args = ap.parse_args(argv)
 
     bars_5m, bars_1h, source = load_data(force_pull=args.pull, demo=args.demo)
@@ -904,6 +1069,10 @@ def main(argv=None):
     if not days:
         print("[main] no valid days — aborting.")
         return 1
+
+    if args.tomorrow:
+        print_tomorrow(days, n_prior=args.tomorrow_priors)
+        return 0
 
     # daily levels CSV
     rows = []
