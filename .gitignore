@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+.envrc
+mnq_1m_clean.csv
+*.dbn
+*.dbn.zst
